@@ -1,6 +1,6 @@
 # seq2squiggle
 
-`seq2squiggle` is a deep learning based-tool for generating artifical nanopore signals from DNA sequence data.
+`seq2squiggle` is a deep learning-based tool for generating artifical nanopore signals from DNA sequence data.
 
 <img src="/img/seq2squiggle_architecture.png" width="750">
 
@@ -25,7 +25,7 @@ mamba activate seq2squiggle
 ### Download training data and model weights
 **Not implemented yet**
 
-When running `seq2squiggle` in prediction mode, `seq2squiggle` needs compatible pretrained model weights to make predictions. The model file can then be specified using the `--model` command-line parameter. To assist users, if no model file is specified `seq2squiggle` will try to download and use a compatible model file automatically.
+When running `seq2squiggle` in prediction mode, `seq2squiggle` requires compatible pretrained model weights to make predictions. The model file can then be specified using the `--model` command-line parameter. To assist users, if no model file is specified `seq2squiggle` will try to download and use a compatible model file automatically.
 
 
 ## Predict signals from FASTA file
