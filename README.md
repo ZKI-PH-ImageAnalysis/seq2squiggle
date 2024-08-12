@@ -18,7 +18,7 @@ Please cite the following publication if you use `seq2squiggle` in your work:
 Proceed as follows to install `seq2squiggle`
 
 ```
-mamba create -f envs/seq2squiggle.yml
+mamba env create -f envs/seq2squiggle.yml
 mamba activate seq2squiggle
 ```
 
