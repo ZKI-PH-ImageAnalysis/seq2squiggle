@@ -1,0 +1,96 @@
+###
+# W&B Sweep configuration.
+###
+program: src/seq2squiggle/train.py
+method: random
+metric:
+  name: valid_signal_loss
+  goal: minimize
+parameters:
+  random_seed: 
+    value: 385
+  max_chunks_train: 
+    value: 1000000
+  max_chunks_valid: 
+    value: 100000
+  scaling_max_value: 
+    value: 165.0
+  train_valid_split: 
+    value: 0.95
+  log_name: 
+    value: "test"
+  # disabled, online, offline
+  wandb_logger_state: 
+    value: "online"
+  allowed_chars: 
+    value:  "_ACTG"
+  max_dna_len: 
+    value: 16
+  max_signal_len: 
+    value: 400
+  allowed_chars: 
+    value: "_ACGT"
+  seq_kmer:
+    value: 9
+  ideal_event_length:
+    value: 10.0
+  pre_layers:
+    values: [0, 1, 2]
+  encoder_layers: 
+    values: [1, 2, 3, 4]
+  fft_hidden: 
+    values: [64, 128, 256, 512]
+  encoder_heads: 
+    values: [4, 8, 16]
+  decoder_layers: 
+    values: [1, 2, 3, 4]
+  decoder_heads: 
+    values: [4, 8, 16]
+  dff: 
+    values: [8, 32, 128, 256, 512] # 256
+  encoder_dropout: 
+    values: [0.1, 0.2]
+  decoder_dropout: 
+    values: [0.1, 0.2]
+  duration_dropout:
+    values: [0.1, 0.2]
+  batch_size:
+    values: [64, 128, 256]
+  max_epochs: 
+    value: 15
+  save_model:
+    value: False
+  last_batch_viz:
+    value: False
+  loss_signal: 
+    values: ["MSE"]
+  dtw_gamma: 
+    value: 0.1
+  dilate_alpha:
+    value: 0.9
+  optimizer: 
+    values: ["Adam", "AdamW"]
+  warmup_steps: 
+    values: [0, 1000]
+  lr: 
+    values: [0.001, 0.0001, 0.00001, 0.000001]
+  weight_decay:
+    values: [0.0, 0.0001, 0.000001]
+  beta_1: 
+    value: 0.9
+  beta_2: 
+    value: 0.98
+  epsilon: 
+    value: 0.0000001 
+  lr_schedule: 
+    values: ["warmup_cosine", "constant"]
+  gradient_clip_val: 
+    values: [0.0, 0.01, 0.5]
+name: Sweep-32DNA-600signalpoints-2
+early_terminate:
+    type: hyperband
+    s: 8
+    eta: 5
+    min_iter: 10
+project: sweep_loss
+entity: denis-beslic

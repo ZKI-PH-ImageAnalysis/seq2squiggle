@@ -1,0 +1,49 @@
+###
+# seq2squiggle configuration.
+###
+
+### Logging parameters
+# Name of logging directory
+log_name: "New-setup"
+# State of wandb logger
+wandb_logger_state: disabled # disabled, online, offline
+
+### Preprocessing parameters
+max_chunks_train: 1000000 
+max_chunks_valid: 100000
+scaling_max_value: 165.0
+# If valid_dir is not provided, validation data will be generated from the training dataset.
+# The following parameter specifies the split between the training and validation datasets.
+train_valid_split: 0.9
+max_dna_len: 16
+max_signal_len: 400
+allowed_chars: "_ACGT"
+seq_kmer: 9
+
+### Model parameters
+pre_layers: 0
+dmodel: 8 
+dff: 16 
+encoder_layers: 1 
+encoder_heads: 4 
+decoder_layers: 1 
+decoder_heads: 4
+encoder_dropout: 0.2
+decoder_dropout: 0.2 
+duration_dropout: 0.2
+
+### Learning rate parameters
+train_batch_size: 64
+max_epochs: 5
+save_model: True
+# Optimizer. Allowed options: Adam, AdamW, SGD, RMSProp,
+optimizer: "AdamW"
+warmup_ratio: 0.06 # Percentage of total steps used for warmup
+lr: 0.005
+weight_decay: 0.0
+# Schedule for learning rate. Allowed options: warmup_cosine, warmup_constant, constant, warmup_cosine_restarts, one_cycle
+lr_schedule: "warmup_cosine"
+# Float value for gradient clipping
+gradient_clip_val: 0.0 # 0.01
+
+
