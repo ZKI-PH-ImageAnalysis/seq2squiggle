@@ -31,49 +31,61 @@ When running `seq2squiggle` in prediction mode, `seq2squiggle` requires compatib
 ## Predict signals from FASTA file
 `seq2squiggle` simulates artificial signals based on an input FASTX file. By default, the output is in SLOW5/BLOW5 format. Exporting to the new POD5 format is also supported, though BLOW5 is preferred for its stability. You will need to specify the path to the model through the configuration file.
 
+Generate 10,000 reads from a fasta file.
 ```
-# Generate 10,000 reads from a fasta. 
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 -n 10000
-
-# Generate reads with a coverage of 30 from a fasta
-./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 -c 30
-
-# Generate reads with a coverage of 30 and an average read length of 5,000 from a fasta
-./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 -c 30 -r 5000
-
-# Simulate signals from basecalled reads (each complete read will be simulated)
-./src/seq2squiggle/seq2squiggle.py predict example.fastq -o example.blow5 --read-input
-
-# Export as pod5
-./src/seq2squiggle/seq2squiggle.py predict example.fastq -o example.pod5 --read-input
-
 ```
+Generate reads with a coverage of 30
+```
+./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 -c 30
+```
+Generate reads with a coverage of 30 and an average read length of 5,000
+```
+./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 -c 30 -r 5000
+```
+Simulate signals from basecalled reads (each single read will be simulated)
+```
+./src/seq2squiggle/seq2squiggle.py predict example.fastq -o example.blow5 --read-input
+```
+Export as pod5
+```
+./src/seq2squiggle/seq2squiggle.py predict example.fastq -o example.pod5 --read-input
+```
+
 
 
 ## Different noise options
 `seq2squiggle` supports different options for generating the signal data.
 Per default, the noise sampler and duration sampler are used.
 
+
+Generate reads using both the noise sampler and duration sampler. 
 ```
-# Generate reads using both the noise sampler and duration sampler. 
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5
+```
 
-# Generate reads using the noise sampler with an increased factor and duration sampler
+Generate reads using the noise sampler with an increased factor and duration sampler
+```
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 --noise-std 1.5
-
-# Generate reads using a normal distribution for the noise and duration sampler
+```
+Generate reads using a static normal distribution for the noise and duration sampler
+```
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 --noise-std 1.5 --noise-sampling False
-
-# Generate reads using only the noise sampler and a normal distribution for the event length 
+```
+Generate reads using only the noise sampler and a static normal distribution for the event length 
+```
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length -1
-
-# Generate reads using only the noise sampler and ideal event lengths 
+```
+Generate reads using only the noise sampler and ideal event lengths 
+```
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0
-
-# Generate reads using a normal distribution for the noise and ideal event lengths
+```
+Generate reads using a static normal distribution for the amplitude noise and ideal event lengths
+```
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0 --noise-sampling False --noise-std 1.0
-
-# Generate reads using no amplitude noise and ideal event lengths
+```
+Generate reads using no amplitude noise and ideal event lengths
+```
 ./src/seq2squiggle/seq2squiggle.py predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0 --noise-sampling False --noise-std -1
 ```
 
