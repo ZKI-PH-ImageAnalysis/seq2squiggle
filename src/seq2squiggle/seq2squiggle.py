@@ -78,7 +78,7 @@ def main():
     seq2squiggle predicts nanopore sequencing signals using a Feed-Forward Transformer.
     seq2squiggle supports fasta/q files for signal prediction and events.tsv from uncalled4 for training new models.
     For more information check the official code repository:
-    - [https://github.com/ZKI-PH3/seq2squiggle]()
+    - [https://github.com/ZKI-PH-ImageAnalysis/seq2squiggle]()
 
     Please cite the following publication if you use seq2squiggle in your work:
     - Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Körber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
