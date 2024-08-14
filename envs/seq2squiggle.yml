@@ -38,9 +38,11 @@ dependencies:
       - attrs==23.2.0
       - black==24.2.0
       - certifi==2024.2.2
+      - cffi==1.17.0
       - charset-normalizer==3.3.2
       - click==8.1.7
       - contourpy==1.2.0
+      - cryptography==43.0.0
       - cycler==0.12.1
       - docker-pycreds==0.4.0
       - einops==0.7.0
@@ -94,7 +96,11 @@ dependencies:
       - protobuf==4.25.2
       - psutil==5.9.8
       - pyarrow==16.1.0
+      - pycparser==2.22
+      - pygithub==2.3.0
       - pygments==2.17.2
+      - pyjwt==2.9.0
+      - pynacl==1.5.0
       - pyparsing==3.1.1
       - pysam==0.22.0
       - pyslow5==1.1.0
@@ -128,4 +134,5 @@ dependencies:
       - vbz-h5py-plugin==1.0.1
       - wandb==0.16.3
       - wcwidth==0.2.13
+      - wrapt==1.16.0
       - yarl==1.9.4
