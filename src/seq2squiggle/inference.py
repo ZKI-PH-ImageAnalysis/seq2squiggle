@@ -6,10 +6,17 @@ Prediction of signals given a fasta file
 import os
 import torch
 import logging
+import pytorch_lightning as pl
+import github
+import appdirs
+import requests
+import functools
+import re
+import tqdm
+import shutil
+
 from signal_io import BLOW5Writer, POD5Writer
 from model import seq2squiggle
-import pytorch_lightning as pl
-
 from utils import get_reads
 from train import DDPStrategy
 from pytorch_lightning.loggers import WandbLogger
@@ -65,7 +72,7 @@ def get_writer(
         raise ValueError("Output file must have .pod5, .slow5, or .blow5 extension.")
 
 
-def check_savedweights(saved_weights: str, log_name: str) -> str:
+def check_savedweights(saved_weights: str) -> str:
     """
     Checks for the existence of the saved weights file and returns the appropriate file path.
 
@@ -73,8 +80,6 @@ def check_savedweights(saved_weights: str, log_name: str) -> str:
     ----------
     saved_weights : str
         The path to the saved weights file.
-    log_name : str
-        The name used to construct the logging directory path.
 
     Returns
     -------
@@ -86,23 +91,93 @@ def check_savedweights(saved_weights: str, log_name: str) -> str:
     FileNotFoundError
         If neither the specified saved weights file nor the default file in the logging directory is found.
     """
-    log_dir = "./logs-" + log_name
-    if saved_weights and os.path.isfile(saved_weights):
-        model_path = saved_weights
-    elif os.path.isfile(os.path.join(log_dir, "last.ckpt")):
-        logger.warning("Model weights were not found or were not set via --model.")
-        logger.warning(
-            f"Model weights from logging directory {log_dir} will be used instead."
-        )
-        model_path = os.path.join(log_dir, "last.ckpt")
-    else:
-        logger.error("Output filemust have .slow5 or .blow5 extension.")
-        raise FileNotFoundError(
-            "Model weights could not be found. "
-            "Please use the --model argument to specify the path to your model file."
-        )
 
-    return model_path
+    if saved_weights and os.path.isfile(saved_weights):
+        return saved_weights
+    
+    logger.info("Weights file path is not provided.")
+    cache_dir = appdirs.user_cache_dir("seq2squiggle", False, opinion=False)
+    os.makedirs(cache_dir, exist_ok=True)
+
+    version = "0.1.0"  # TODO: Fetch current version dynamically
+    version_match = None, None, 0
+
+    # Search in local cache
+    for filename in os.listdir(cache_dir):
+        root, ext = os.path.splitext(filename)
+        if ext == ".ckpt":
+            file_version = tuple(
+                g for g in re.match(r".*@v(\d+).(\d+).(\d+)", root).groups()
+            )
+            match = (
+                sum(m)
+                if (m := [i == j for i, j in zip(version, file_version)])[0]
+                else 0
+            )
+            if match > version_match[2]:
+                version_match = os.path.join(cache_dir, filename), None, match
+    if version_match[2] > 0:
+        logger.info(
+            "Model weights file %s retrieved from local cache",
+            version_match[0],
+        )
+        return version_match[0]
+
+    # Search for weights on GitHub repo of seq2squiggle
+    repo = github.Github().get_repo("ZKI-PH-ImageAnalysis/seq2squiggle")
+    for release in repo.get_releases():
+        rel_version = tuple(
+            g
+            for g in re.match(
+                r"v(\d+)\.(\d+)\.(\d+)", release.tag_name
+            ).groups()
+        )
+        match = (
+            sum(m)
+            if (m := [i == j for i, j in zip(version, rel_version)])[0]
+            else 0
+        )
+        if match > version_match[2]:
+            for release_asset in release.get_assets():
+                fn, ext = os.path.splitext(release_asset.name)
+                if ext == ".ckpt":
+                    version_match = (
+                        os.path.join(
+                            cache_dir,
+                            f"{fn}@v{'.'.join(map(str, rel_version))}{ext}",
+                        ),
+                        release_asset.browser_download_url,
+                        match,
+                    )
+                    break
+    # Download the model weights if a matching release was found.
+    if version_match[2] > 0:
+        filename, url, _ = version_match
+        logger.info(
+            "Downloading model weights file %s from %s", filename, url
+        )
+        r = requests.get(url, stream=True, allow_redirects=True)
+        r.raise_for_status()
+        file_size = int(r.headers.get("Content-Length", 0))
+        desc = "(Unknown total file size)" if file_size == 0 else ""
+        r.raw.read = functools.partial(r.raw.read, decode_content=True)
+        with tqdm.tqdm.wrapattr(
+            r.raw, "read", total=file_size, desc=desc
+        ) as r_raw, open(filename, "wb") as f:
+            shutil.copyfileobj(r_raw, f)
+        return filename
+    else:
+        logger.error(
+            "No matching model weights for release v%s found, please "
+            "specify your model weights explicitly using the `--model` "
+            "parameter",
+            version,
+        )
+        raise ValueError(
+            f"No matching model weights for release v{version} found, "
+            f"please specify your model weights explicitly using the "
+            f"`--model` parameter"
+        )
 
 
 def check_model(model: object, config: dict) -> None:
@@ -123,12 +198,18 @@ def check_model(model: object, config: dict) -> None:
     model_params = model.hparams.config
     architecture_params = config
 
-    for param in architecture_params:
-        if model_params[param] != architecture_params[param]:
-            logger.warning(
-                f"Mismatching {param} parameter in model checkpoint"
-                f" ({model_params[param]}) and in config file ({architecture_params[param]})"
-            )
+    # A list of parameter names to exclude from the comparison
+    exclude_params = ["log_name", "wandb_logger_state", "max_chunks_train", 
+    "max_chunks_valid", "train_valid_split", "train_batch_size", "save_model"]
+
+    # Check for mismatches in parameters that are not in the exclusion list
+    for param, value in architecture_params.items():
+        if param not in exclude_params:
+            if model_params.get(param) != value:
+                logger.warning(
+                    f"Mismatching {param} parameter in model checkpoint"
+                    f" ({model_params.get(param)}) and in config file ({value})"
+                )
 
 
 def inference_run(
@@ -198,7 +279,7 @@ def inference_run(
         out, profile, ideal_event_length, export_every_n_samples
     )
 
-    saved_weights = check_savedweights(saved_weights, config["log_name"])
+    saved_weights = check_savedweights(saved_weights)
 
     load_model = seq2squiggle.load_from_checkpoint(
         checkpoint_path=saved_weights,
