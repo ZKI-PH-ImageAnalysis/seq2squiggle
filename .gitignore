@@ -1,3 +1,9 @@
+*.ckpt
+*.slow5
+*.blow5
+*.pod5
+
+
 # Scripts
 *.sh
 
