@@ -137,8 +137,8 @@ def preprocess(
     EVENTS_PATH must be a events.tsv from f5c.
     OUTDIR must be path to output directory
     """
-    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
     set_seeds(seed)
     config = set_config(config)
     preprocess_run(
@@ -183,8 +183,8 @@ def train(
 
     NPY_DIR must be directory containing the .npy files from the preprocessing module
     """
-    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
     set_seeds(seed)
     config = set_config(config)
     # print all parameters defined in config file
@@ -327,9 +327,8 @@ def predict(
 
     FASTA must be .fasta file with desired genome or reads for simulation
     """
-
-    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
 
     # Collect arguments into a dictionary
     args = {
@@ -406,8 +405,8 @@ def sweep(
     To create a new sweep you need to create a wandb sweep
     'wandb sweep --project projectname configs/sweep.yaml'
     """
-    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
     set_seeds(seed)
     config = set_config(config)
     wandb.agent(sweep_id, train_sweep_run, count=200)
