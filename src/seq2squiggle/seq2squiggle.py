@@ -6,6 +6,7 @@ import yaml
 import os
 import rich_click as click
 import wandb
+import warnings
 
 from train import train_run
 from preprocess import preprocess_run
@@ -13,14 +14,26 @@ from inference import inference_run
 from train_sweep import train_sweep_run
 from utils import set_seeds, setup_logging
 
+
+warnings.filterwarnings(
+    "ignore",
+    ".*Consider increasing the value of the `num_workers` argument*",
+)
+warnings.filterwarnings(
+    "ignore",
+    ".*In combination with multi-process data loading*",
+)
+warnings.filterwarnings(
+    "ignore",
+    ".*predict returned None if it was on purpose*",
+)
+
 logger = logging.getLogger("seq2squiggle")
 
 click.rich_click.USE_MARKDOWN = True
 click.rich_click.STYLE_HELPTEXT = ""
 click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.WIDTH = None
-
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 
 class _SharedParams(click.RichCommand):
@@ -50,10 +63,7 @@ class _SharedParams(click.RichCommand):
                 ("-y", "--config"),
                 help="""
                 The YAML configuration file overriding the default options.
-                Default is config/config.yaml
                 """,
-                default="config/config.yaml",
-                type=click.Path(exists=True, dir_okay=False),
             ),
             click.Option(
                 ("-v", "--verbosity"),
@@ -128,8 +138,7 @@ def preprocess(
     """
     setup_logging(verbosity)
     set_seeds(seed)
-    with open(config) as f_in:
-        config = yaml.safe_load(f_in)
+    config = set_config(config)
     preprocess_run(
         events_path=events_path,
         outdir=outdir,
@@ -174,8 +183,7 @@ def train(
     """
     setup_logging(verbosity)
     set_seeds(seed)
-    with open(config) as f_in:
-        config = yaml.safe_load(f_in)
+    config = set_config(config)
     # print all parameters defined in config file
     logger.info("Config parameters:")
     for key in config:
@@ -318,6 +326,8 @@ def predict(
     """
 
     setup_logging(verbosity)
+    __version__ = "0.1.0" # Get Version from 
+    logger.info("Seq2squiggle version %s", str(__version__))
 
     # Collect arguments into a dictionary
     args = {
@@ -344,8 +354,8 @@ def predict(
     logger.info("Arguments:")
     for key, value in args.items():
         logger.info(f" {key}: {value}")
-    with open(config) as f_in:
-        config = yaml.safe_load(f_in)
+
+    config = set_config(config)
     logger.debug("Config parameters:")
     for key in config:
         logger.debug(f" {key}: {config[key]}")
@@ -396,24 +406,29 @@ def sweep(
     """
     setup_logging(verbosity)
     set_seeds(seed)
-
-    with open(config) as f_in:
-        sweep_config = yaml.safe_load(f_in)
+    config = set_config(config)
     wandb.agent(sweep_id, train_sweep_run, count=200)
 
 
-def download_model_weights():
-    """
-    Use cached model weights or download them from GitHub.
+def set_config(config_path : dict) -> dict:
+    default_config_path = pathlib.Path(__file__).parent.parent.parent / "config/config.yaml"
 
-    Returns
-    -------
-    str
-        The name of the model weights file.
-    """
-    logger.error("Not implemented yet.")
-    exit()
+    path_to_use = default_config_path if config_path is None else config_path
 
+    try:
+        with open(path_to_use, 'r') as f_in:
+            config = yaml.safe_load(f_in)
+    except FileNotFoundError:
+        logger.error(f"Configuration file not found: {path_to_use}")
+        raise
+    except yaml.YAMLError as exc:
+        logger.error(f"Error parsing YAML file: {path_to_use} - {exc}")
+        raise
 
+    if config_path is None:
+        logger.info(f"Config file was not specified. Default config will be used.")
+
+    return config
+    
 if __name__ == "__main__":
     main()
