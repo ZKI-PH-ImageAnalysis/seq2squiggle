@@ -72,7 +72,7 @@ def get_writer(
         raise ValueError("Output file must have .pod5, .slow5, or .blow5 extension.")
 
 
-def check_savedweights(saved_weights: str) -> str:
+def get_saved_weights() -> str:
     """
     Checks for the existence of the saved weights file and returns the appropriate file path.
 
@@ -92,9 +92,6 @@ def check_savedweights(saved_weights: str) -> str:
         If neither the specified saved weights file nor the default file in the logging directory is found.
     """
 
-    if saved_weights and os.path.isfile(saved_weights):
-        return saved_weights
-    
     logger.info("Weights file path is not provided.")
     cache_dir = appdirs.user_cache_dir("seq2squiggle", False, opinion=False)
     os.makedirs(cache_dir, exist_ok=True)
@@ -127,15 +124,10 @@ def check_savedweights(saved_weights: str) -> str:
     repo = github.Github().get_repo("ZKI-PH-ImageAnalysis/seq2squiggle")
     for release in repo.get_releases():
         rel_version = tuple(
-            g
-            for g in re.match(
-                r"v(\d+)\.(\d+)\.(\d+)", release.tag_name
-            ).groups()
+            g for g in re.match(r"v(\d+)\.(\d+)\.(\d+)", release.tag_name).groups()
         )
         match = (
-            sum(m)
-            if (m := [i == j for i, j in zip(version, rel_version)])[0]
-            else 0
+            sum(m) if (m := [i == j for i, j in zip(version, rel_version)])[0] else 0
         )
         if match > version_match[2]:
             for release_asset in release.get_assets():
@@ -153,9 +145,7 @@ def check_savedweights(saved_weights: str) -> str:
     # Download the model weights if a matching release was found.
     if version_match[2] > 0:
         filename, url, _ = version_match
-        logger.info(
-            "Downloading model weights file %s from %s", filename, url
-        )
+        logger.info("Downloading model weights file %s from %s", filename, url)
         r = requests.get(url, stream=True, allow_redirects=True)
         r.raise_for_status()
         file_size = int(r.headers.get("Content-Length", 0))
@@ -199,8 +189,15 @@ def check_model(model: object, config: dict) -> None:
     architecture_params = config
 
     # A list of parameter names to exclude from the comparison
-    exclude_params = ["log_name", "wandb_logger_state", "max_chunks_train", 
-    "max_chunks_valid", "train_valid_split", "train_batch_size", "save_model"]
+    exclude_params = [
+        "log_name",
+        "wandb_logger_state",
+        "max_chunks_train",
+        "max_chunks_valid",
+        "train_valid_split",
+        "train_batch_size",
+        "save_model",
+    ]
 
     # Check for mismatches in parameters that are not in the exclusion list
     for param, value in architecture_params.items():
@@ -279,7 +276,21 @@ def inference_run(
         out, profile, ideal_event_length, export_every_n_samples
     )
 
-    saved_weights = check_savedweights(saved_weights)
+    if saved_weights is None:
+        try:
+            saved_weights = get_saved_weights()
+        except github.RateLimitExceededException:
+            logger.error(
+                "GitHub API rate limit exceeded while trying to download the "
+                "model weights. Please download compatible model weights "
+                "manually from the seq2squiggle GitHub repository "
+                "(https://github.com/ZKI-PH-ImageAnalysis/seq2squiggle) and specify these "
+                "using the `--model` parameter"
+            )
+            raise PermissionError(
+                "GitHub API rate limit exceeded while trying to download the "
+                "model weights"
+            )
 
     load_model = seq2squiggle.load_from_checkpoint(
         checkpoint_path=saved_weights,
