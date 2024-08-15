@@ -23,10 +23,10 @@ mamba activate seq2squiggle
 ```
 
 ### Download training data and model weights
-**Not implemented yet**
 
-When running `seq2squiggle` in prediction mode, `seq2squiggle` requires compatible pretrained model weights to make predictions. The model file can then be specified using the `--model` command-line parameter. To assist users, if no model file is specified `seq2squiggle` will try to download and use a compatible model file automatically.
+`seq2squiggle` requires compatible pretrained model weights to make predictions, which can be specified using the `--model` command-line parameter.
 
+If you do not provide a model file, seq2squiggle will automatically attempt to download a compatible model file to ensure predictions can be made. 
 
 ## Predict signals from FASTA file
 `seq2squiggle` simulates artificial signals based on an input FASTX file. By default, the output is in SLOW5/BLOW5 format. Exporting to the new POD5 format is also supported, though BLOW5 is preferred for its stability. You will need to specify the path to the model through the configuration file.
