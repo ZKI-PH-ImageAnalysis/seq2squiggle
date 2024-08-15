@@ -21,6 +21,7 @@ from .model import seq2squiggle
 from .utils import get_reads
 from .train import DDPStrategy
 from .dataloader import PoreDataModule
+from . import __version__
 
 
 logger = logging.getLogger("seq2squiggle")
@@ -96,7 +97,7 @@ def get_saved_weights() -> str:
     cache_dir = appdirs.user_cache_dir("seq2squiggle", False, opinion=False)
     os.makedirs(cache_dir, exist_ok=True)
 
-    version = "0.1.0"  # TODO: Fetch current version dynamically
+    version = __version__
     version_match = None, None, 0
 
     # Search in local cache
