@@ -14,13 +14,13 @@ import functools
 import re
 import tqdm
 import shutil
-
-from signal_io import BLOW5Writer, POD5Writer
-from model import seq2squiggle
-from utils import get_reads
-from train import DDPStrategy
 from pytorch_lightning.loggers import WandbLogger
-from dataloader import PoreDataModule
+
+from .signal_io import BLOW5Writer, POD5Writer
+from .model import seq2squiggle
+from .utils import get_reads
+from .train import DDPStrategy
+from .dataloader import PoreDataModule
 
 
 logger = logging.getLogger("seq2squiggle")

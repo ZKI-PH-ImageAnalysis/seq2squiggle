@@ -7,8 +7,9 @@ Basic modules of seq2squiggle model
 import torch
 from torch import nn
 import torch.nn.functional as F
-from layers import FFTBlock, get_sinusoid_encoding_table
 from numba import jit
+
+from .layers import FFTBlock, get_sinusoid_encoding_table
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

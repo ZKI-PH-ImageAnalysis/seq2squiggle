@@ -8,11 +8,12 @@ import rich_click as click
 import wandb
 import warnings
 
-from train import train_run
-from preprocess import preprocess_run
-from inference import inference_run
-from train_sweep import train_sweep_run
-from utils import set_seeds, setup_logging
+from .train import train_run
+from .preprocess import preprocess_run
+from .inference import inference_run
+from .train_sweep import train_sweep_run
+from .utils import set_seeds, setup_logging
+from . import __version__
 
 
 warnings.filterwarnings(
@@ -91,7 +92,7 @@ def main():
     - [https://github.com/ZKI-PH-ImageAnalysis/seq2squiggle]()
 
     Please cite the following publication if you use seq2squiggle in your work:
-    - Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Körber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
+    - Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Koerber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
     """
 
 
@@ -136,6 +137,7 @@ def preprocess(
     EVENTS_PATH must be a events.tsv from f5c.
     OUTDIR must be path to output directory
     """
+    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
     set_seeds(seed)
     config = set_config(config)
@@ -181,6 +183,7 @@ def train(
 
     NPY_DIR must be directory containing the .npy files from the preprocessing module
     """
+    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
     set_seeds(seed)
     config = set_config(config)
@@ -325,9 +328,8 @@ def predict(
     FASTA must be .fasta file with desired genome or reads for simulation
     """
 
+    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
-    __version__ = "0.1.0" # Get Version from 
-    logger.info("Seq2squiggle version %s", str(__version__))
 
     # Collect arguments into a dictionary
     args = {
@@ -404,6 +406,7 @@ def sweep(
     To create a new sweep you need to create a wandb sweep
     'wandb sweep --project projectname configs/sweep.yaml'
     """
+    logger.info("seq2squiggle version %s", str(__version__))
     setup_logging(verbosity)
     set_seeds(seed)
     config = set_config(config)

@@ -7,9 +7,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 
-from dataloader import PoreDataModule
-from model import seq2squiggle
-from train import _get_strategy
+from .dataloader import PoreDataModule
+from .model import seq2squiggle
+from .train import _get_strategy
 
 
 def train_sweep_run(npz_path="preprocess-HP-run/"):

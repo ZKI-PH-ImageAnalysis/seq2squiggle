@@ -17,7 +17,7 @@ from typing import Tuple, List, Optional, Dict, Generator
 from bisect import bisect
 from sklearn.model_selection import train_test_split
 
-from utils import split_sequence
+from .utils import split_sequence
 
 logger = logging.getLogger("seq2squiggle")
 
