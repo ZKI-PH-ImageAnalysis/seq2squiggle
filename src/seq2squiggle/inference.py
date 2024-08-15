@@ -301,6 +301,7 @@ def inference_run(
         duration_sampling=duration_sampling,
         export_every_n_samples=export_every_n_samples,
     )
+
     check_model(load_model, config)
 
     reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed)
@@ -313,18 +314,11 @@ def inference_run(
         n_workers=1,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
     )
 
-    wandb_logger = WandbLogger(
-        project="seq2squiggle-testing",
-        config=config,
-        name=config["log_name"],
-        mode="disabled",
-    )
-
     trainer = pl.Trainer(
         accelerator="auto",
         precision="16-mixed",
         devices="auto",
-        logger=wandb_logger,
+        logger=False,
         strategy=_get_strategy(),
     )
 
