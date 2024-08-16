@@ -3,7 +3,7 @@
 This guide provides an overview of the contribution workflow from setting up a development environment, testing your changes, submitting a pull request and performing a release.
 
 
-It's based on the contribution guide of [breakfast written by Matthew Huska](https://github.com/rki-mf1/breakfast), which again follows the pacakging guidelines ["Hypermodern Python" by Claudio Jolowicz](https://cjolowicz.github.io/posts/hypermodern-python-01-setup/).
+It's based on the contribution guide of [breakfast written by Matthew Huska](https://github.com/rki-mf1/breakfast), which follows the packaging guidelines ["Hypermodern Python" by Claudio Jolowicz](https://cjolowicz.github.io/posts/hypermodern-python-01-setup/).
 
 ## New contributor guide
 To get an overview of the project itself, read the [README](README.md).
