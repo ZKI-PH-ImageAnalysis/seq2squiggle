@@ -125,4 +125,4 @@ seq2squiggle train train_dir valid_dir --config my_config.yml --model last.ckpt
 ```
 
 ## Acknowledgement
-The model is based on [xcmyz's implementation of FastSpeech](https://github.com/xcmyz/FastSpeech). Some code snippets for preprocessing DNA-signal chunks have been taken from [bonito](https://github.com/nanoporetech/bonito). 
+The model is based on [xcmyz's implementation of FastSpeech](https://github.com/xcmyz/FastSpeech). Some code snippets for preprocessing DNA-signal chunks have been taken from [bonito](https://github.com/nanoporetech/bonito). We also incorporated code snippets from [Casanovo](https://github.com/Noble-Lab/casanovo) for different functionalities, including downloading weights, logging, and the design of the main function. 
