@@ -7,6 +7,9 @@ import os
 import rich_click as click
 import wandb
 import warnings
+import torch
+import pytorch_lightning as pl
+import pod5
 
 from .train import train_run
 from .preprocess import preprocess_run
@@ -84,7 +87,7 @@ class _SharedParams(click.RichCommand):
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 def main():
     """
-    # seq2squiggle 
+    # seq2squiggle
 
     seq2squiggle predicts nanopore sequencing signals using a Feed-Forward Transformer.
     seq2squiggle supports fasta/q files for signal prediction and events.tsv from uncalled4 for training new models.
@@ -410,6 +413,17 @@ def sweep(
     set_seeds(seed)
     config = set_config(config)
     wandb.agent(sweep_id, train_sweep_run, count=200)
+
+
+@main.command()
+def version() -> None:
+    """Get the version of seq2squiggle"""
+    setup_logging("info")
+    logger.info(f"seq2squiggle: {__version__}")
+    logger.info(f"pytorch: {torch.__version__}")
+    logger.info(f"lightning: {pl.__version__}")
+    logger.info(f"pod5: {pod5.__version__}")
+
 
 
 def set_config(config_path : dict) -> dict:
