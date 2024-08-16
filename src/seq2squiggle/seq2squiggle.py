@@ -416,7 +416,7 @@ def sweep(
 
 
 @main.command()
-def version() -> None:
+def version():
     """Get the version of seq2squiggle"""
     setup_logging("info")
     logger.info(f"seq2squiggle: {__version__}")
