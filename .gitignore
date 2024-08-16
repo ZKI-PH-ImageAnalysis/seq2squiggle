@@ -2,7 +2,7 @@
 *.slow5
 *.blow5
 *.pod5
-
+*.tsv
 
 # Scripts
 *.sh
