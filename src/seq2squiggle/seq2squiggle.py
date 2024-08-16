@@ -84,7 +84,7 @@ class _SharedParams(click.RichCommand):
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 def main():
     """
-    # seq2squiggle
+    # seq2squiggle 
 
     seq2squiggle predicts nanopore sequencing signals using a Feed-Forward Transformer.
     seq2squiggle supports fasta/q files for signal prediction and events.tsv from uncalled4 for training new models.
@@ -413,7 +413,7 @@ def sweep(
 
 
 def set_config(config_path : dict) -> dict:
-    default_config_path = pathlib.Path(__file__).parent.parent.parent / "config/config.yaml"
+    default_config_path = pathlib.Path(__file__).parent / "config.yaml"
 
     path_to_use = default_config_path if config_path is None else config_path
 

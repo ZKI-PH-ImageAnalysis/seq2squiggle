@@ -315,9 +315,14 @@ def inference_run(
         n_workers=1,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
     )
 
+    # "gamma_cpu" not implemented for 'BFloat16'
+    precision = "64"
+    if torch.cuda.device_count() >= 1:
+        precision = "16-mixed"
+
     trainer = pl.Trainer(
         accelerator="auto",
-        precision="16-mixed",
+        precision=precision,
         devices="auto",
         logger=False,
         strategy=_get_strategy(),
