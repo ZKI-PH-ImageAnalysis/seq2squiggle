@@ -13,8 +13,8 @@ from transformers.optimization import AdafactorSchedule
 import logging
 import numpy as np
 
-from modules import Encoder, LengthRegulator, Decoder, NoiseSampler
-from utils import generate_validation_plots
+from .modules import Encoder, LengthRegulator, Decoder, NoiseSampler
+from .utils import generate_validation_plots
 
 logger = logging.getLogger("seq2squiggle")
 

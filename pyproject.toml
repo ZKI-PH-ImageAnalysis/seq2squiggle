@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "seq2squiggle"
+version = "0.2.0"
+description = "End-to-end simulation of nanopore sequencing signals with feed-forward transformers"
+authors = ["Denis Beslic <beslicd@rki.de>"]
+license = "MIT"
+homepage = "https://github.com/ZKI-PH-ImageAnalysis/seq2squiggle"
+repository = "https://github.com/ZKI-PH-ImageAnalysis/seq2squiggle"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+appdirs = "^1.4.4"
+torch = "^2.3.1"
+lightning = "^2.2.5"
+pod5 = "^0.3.12"
+PyGithub = "^2.3.0"
+PyYAML = "^6.0.1"
+tqdm = "^4.66.2"
+numpy = "^1.26.4"
+rich-click = "^1.8.2"
+wandb = "^0.16.3"
+scikit-learn = "^1.4.0"
+matplotlib = "^3.9.0"
+pysam = "^0.22.0"
+prettytable = "^3.9.0"
+transformers = "^4.41.2"
+numba = "^0.59.0"
+pyslow5 = "^1.1.0"
+
+[tool.poetry.scripts]
+seq2squiggle = "seq2squiggle.seq2squiggle:main"
+
+[tool.coverage.paths]
+source = ["src", "*/site-packages"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

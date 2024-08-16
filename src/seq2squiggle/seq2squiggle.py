@@ -6,12 +6,31 @@ import yaml
 import os
 import rich_click as click
 import wandb
+import warnings
+import torch
+import pytorch_lightning as pl
+import pod5
 
-from train import train_run
-from preprocess import preprocess_run
-from inference import inference_run
-from train_sweep import train_sweep_run
-from utils import set_seeds, setup_logging
+from .train import train_run
+from .preprocess import preprocess_run
+from .inference import inference_run
+from .train_sweep import train_sweep_run
+from .utils import set_seeds, setup_logging
+from . import __version__
+
+
+warnings.filterwarnings(
+    "ignore",
+    ".*Consider increasing the value of the `num_workers` argument*",
+)
+warnings.filterwarnings(
+    "ignore",
+    ".*In combination with multi-process data loading*",
+)
+warnings.filterwarnings(
+    "ignore",
+    ".*predict returned None if it was on purpose*",
+)
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -19,8 +38,6 @@ click.rich_click.USE_MARKDOWN = True
 click.rich_click.STYLE_HELPTEXT = ""
 click.rich_click.SHOW_ARGUMENTS = True
 click.rich_click.WIDTH = None
-
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 
 class _SharedParams(click.RichCommand):
@@ -50,10 +67,7 @@ class _SharedParams(click.RichCommand):
                 ("-y", "--config"),
                 help="""
                 The YAML configuration file overriding the default options.
-                Default is config/config.yaml
                 """,
-                default="config/config.yaml",
-                type=click.Path(exists=True, dir_okay=False),
             ),
             click.Option(
                 ("-v", "--verbosity"),
@@ -78,10 +92,10 @@ def main():
     seq2squiggle predicts nanopore sequencing signals using a Feed-Forward Transformer.
     seq2squiggle supports fasta/q files for signal prediction and events.tsv from uncalled4 for training new models.
     For more information check the official code repository:
-    - [https://github.com/ZKI-PH3/seq2squiggle]()
+    - [https://github.com/ZKI-PH-ImageAnalysis/seq2squiggle]()
 
     Please cite the following publication if you use seq2squiggle in your work:
-    - Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Körber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
+    - Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Koerber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
     """
 
 
@@ -127,9 +141,9 @@ def preprocess(
     OUTDIR must be path to output directory
     """
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
     set_seeds(seed)
-    with open(config) as f_in:
-        config = yaml.safe_load(f_in)
+    config = set_config(config)
     preprocess_run(
         events_path=events_path,
         outdir=outdir,
@@ -173,9 +187,9 @@ def train(
     NPY_DIR must be directory containing the .npy files from the preprocessing module
     """
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
     set_seeds(seed)
-    with open(config) as f_in:
-        config = yaml.safe_load(f_in)
+    config = set_config(config)
     # print all parameters defined in config file
     logger.info("Config parameters:")
     for key in config:
@@ -316,8 +330,8 @@ def predict(
 
     FASTA must be .fasta file with desired genome or reads for simulation
     """
-
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
 
     # Collect arguments into a dictionary
     args = {
@@ -344,8 +358,8 @@ def predict(
     logger.info("Arguments:")
     for key, value in args.items():
         logger.info(f" {key}: {value}")
-    with open(config) as f_in:
-        config = yaml.safe_load(f_in)
+
+    config = set_config(config)
     logger.debug("Config parameters:")
     for key in config:
         logger.debug(f" {key}: {config[key]}")
@@ -395,25 +409,42 @@ def sweep(
     'wandb sweep --project projectname configs/sweep.yaml'
     """
     setup_logging(verbosity)
+    logger.info("seq2squiggle version %s", str(__version__))
     set_seeds(seed)
-
-    with open(config) as f_in:
-        sweep_config = yaml.safe_load(f_in)
+    config = set_config(config)
     wandb.agent(sweep_id, train_sweep_run, count=200)
 
 
-def download_model_weights():
-    """
-    Use cached model weights or download them from GitHub.
-
-    Returns
-    -------
-    str
-        The name of the model weights file.
-    """
-    logger.error("Not implemented yet.")
-    exit()
+@main.command()
+def version():
+    """Get the version of seq2squiggle"""
+    setup_logging("info")
+    logger.info(f"seq2squiggle: {__version__}")
+    logger.info(f"pytorch: {torch.__version__}")
+    logger.info(f"lightning: {pl.__version__}")
+    logger.info(f"pod5: {pod5.__version__}")
 
 
+
+def set_config(config_path : dict) -> dict:
+    default_config_path = pathlib.Path(__file__).parent / "config.yaml"
+
+    path_to_use = default_config_path if config_path is None else config_path
+
+    try:
+        with open(path_to_use, 'r') as f_in:
+            config = yaml.safe_load(f_in)
+    except FileNotFoundError:
+        logger.error(f"Configuration file not found: {path_to_use}")
+        raise
+    except yaml.YAMLError as exc:
+        logger.error(f"Error parsing YAML file: {path_to_use} - {exc}")
+        raise
+
+    if config_path is None:
+        logger.info(f"Config file was not specified. Default config will be used.")
+
+    return config
+    
 if __name__ == "__main__":
     main()

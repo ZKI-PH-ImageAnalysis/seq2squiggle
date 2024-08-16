@@ -14,7 +14,7 @@ from tqdm import tqdm
 import polars as pl
 from typing import List, Optional, Tuple, Generator, Any, Dict
 
-from utils import regular_break_points, one_hot_encode
+from .utils import regular_break_points, one_hot_encode
 
 logger = logging.getLogger("seq2squiggle")
 

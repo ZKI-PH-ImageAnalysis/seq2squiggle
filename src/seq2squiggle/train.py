@@ -12,9 +12,9 @@ from typing import Union
 import os
 import logging
 
-from dataloader import PoreDataModule
-from utils import count_parameters, n_workers
-from model import seq2squiggle
+from .dataloader import PoreDataModule
+from .utils import count_parameters, n_workers
+from .model import seq2squiggle
 
 logger = logging.getLogger("seq2squiggle")
 
