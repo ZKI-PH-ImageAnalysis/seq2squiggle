@@ -216,9 +216,9 @@ class seq2squiggle(pl.LightningModule):
 
         prediction = self.decoders(length_predict_out)
 
-        prediction = prediction.cpu().squeeze(-1)
-
         prediction = prediction * self.config["scaling_max_value"]
+
+        prediction = prediction.squeeze(-1)
 
         non_zero_mask = prediction != 0
 

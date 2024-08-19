@@ -303,6 +303,8 @@ def inference_run(
         export_every_n_samples=export_every_n_samples,
     )
 
+    # load_model = torch.compile(load_model)
+
     check_model(load_model, config)
 
     reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed)
@@ -316,9 +318,7 @@ def inference_run(
     )
 
     # "gamma_cpu" not implemented for 'BFloat16'
-    precision = "64"
-    if torch.cuda.device_count() >= 1:
-        precision = "16-mixed"
+    precision = "16-mixed" if torch.cuda.device_count() >= 1 else "64"
 
     trainer = pl.Trainer(
         accelerator="auto",
