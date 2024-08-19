@@ -224,20 +224,16 @@ class seq2squiggle(pl.LightningModule):
 
         if self.noise_std > 0:
             if self.noise_sampling:
-                noise_std = noise_std_prediction_ext.detach().cpu().squeeze().numpy()
-                noise_std = (
-                    noise_std * self.noise_std * self.config["scaling_max_value"]
-                )
-                gen_noise = np.random.normal(loc=0, scale=noise_std)
-                gen_noise = torch.tensor(gen_noise, dtype=prediction.dtype)
+                noise_std_prediction_ext = noise_std_prediction_ext.to(prediction.device)
+                
+                noise_std = noise_std_prediction_ext.squeeze() * self.noise_std * self.config["scaling_max_value"]
+                
+                gen_noise = torch.normal(mean=0, std=noise_std)
+                
                 prediction[non_zero_mask] += gen_noise[non_zero_mask]
             else:
-                noise = np.random.normal(
-                    loc=0, scale=self.noise_std, size=prediction.shape
-                )
-                noise = torch.tensor(
-                    noise, dtype=prediction.dtype, device=prediction.device
-                )
+                noise = torch.normal(mean=0, std=self.noise_std, size=prediction.shape, device=prediction.device)
+                
                 prediction[non_zero_mask] += noise[non_zero_mask]
 
         # Clamp the tensor to ensure no negative values
