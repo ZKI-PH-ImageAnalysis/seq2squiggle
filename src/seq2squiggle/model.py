@@ -195,7 +195,6 @@ class seq2squiggle(pl.LightningModule):
 
     def predict_step(self, batch):
         read_id, data, *args = batch
-
         bs, seq_l = data.shape[:2]
         data = data.reshape(bs, seq_l, -1)
 
@@ -214,42 +213,37 @@ class seq2squiggle(pl.LightningModule):
             duration_sampling=self.duration_sampling,
         )
 
+
         prediction = self.decoders(length_predict_out)
 
         prediction = prediction * self.config["scaling_max_value"]
-
         prediction = prediction.squeeze(-1)
-
-        non_zero_mask = prediction != 0
-
+        
         if self.noise_std > 0:
+            non_zero_mask = torch.nonzero(prediction)
             if self.noise_sampling:
-                noise_std_prediction_ext = noise_std_prediction_ext.to(prediction.device)
-                
                 noise_std = noise_std_prediction_ext.squeeze() * self.noise_std * self.config["scaling_max_value"]
-                
-                gen_noise = torch.normal(mean=0, std=noise_std)
-                
+
+                gen_noise = noise_std * torch.cuda.FloatTensor(prediction.shape).normal_()
+
                 prediction[non_zero_mask] += gen_noise[non_zero_mask]
+                # TODO Needs additional checks
             else:
-                noise = torch.normal(mean=0, std=self.noise_std, size=prediction.shape, device=prediction.device)
-                
-                prediction[non_zero_mask] += noise[non_zero_mask]
+                gen_noise = self.noise_std * torch.cuda.FloatTensor(prediction.shape).normal_()
 
-        # Clamp the tensor to ensure no negative values
-        prediction = torch.clamp(prediction, min=0)
-
-        # Create dict of read_id and predictions
+                prediction[non_zero_mask] += gen_noise[non_zero_mask]
+                # TODO Needs additional checks
+        prediction.clamp_(min=0)
+    
         d = {}
         for read, pred in zip(read_id, prediction):
             d.setdefault(read, []).append(pred)
         self.results.append(d)
-
-        # Increment the sample count
-        self.total_samples += data.shape[0]
+        
         if self.total_samples >= self.export_every_n_samples:
             self.export_and_clear_results(keep_last=True)
             self.total_samples = 0  # Reset sample count
+    
 
     def export_and_clear_results(self, keep_last: bool = True):
         """

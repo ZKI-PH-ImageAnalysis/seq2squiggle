@@ -91,9 +91,7 @@ def train_run(
     ]
 
     # "gamma_cpu" not implemented for 'BFloat16'
-    precision = "64"
-    if torch.cuda.device_count() >= 1:
-        precision = "16-mixed"
+    precision = "16-mixed" if torch.cuda.device_count() >= 1 else "64"
 
     trainer = pl.Trainer(
         accelerator="auto",

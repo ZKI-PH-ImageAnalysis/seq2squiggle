@@ -303,8 +303,6 @@ def inference_run(
         export_every_n_samples=export_every_n_samples,
     )
 
-    # load_model = torch.compile(load_model)
-
     check_model(load_model, config)
 
     reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed)
