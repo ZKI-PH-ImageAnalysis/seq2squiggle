@@ -74,11 +74,8 @@ class Encoder(nn.Module):
                 src_seq = pre_layer(src_seq)
                 src_seq = self.relu(src_seq)
 
-        enc_output = src_seq + get_sinusoid_encoding_table(
-            src_seq.shape[1], src_seq.shape[2]
-        )[: src_seq.shape[1], :].unsqueeze(0).expand(batch_size, -1, -1).to(
-            src_seq.device
-        )
+
+        enc_output = src_seq + self.position_enc[:src_seq.shape[1]]
 
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(
@@ -134,18 +131,7 @@ class Decoder(nn.Module):
     def forward(self, enc_seq):
         batch_size, max_len = enc_seq.shape[0], enc_seq.shape[1]
 
-        # -- Forward
-        if not self.training and enc_seq.shape[1] > self.max_seq_len:
-            dec_output = enc_seq + get_sinusoid_encoding_table(
-                enc_seq.shape[1], self.d_model
-            )[: enc_seq.shape[1], :].unsqueeze(0).expand(batch_size, -1, -1).to(
-                enc_seq.device
-            )
-        else:
-            max_len = min(max_len, self.max_seq_len)
-            dec_output = enc_seq[:, :max_len, :] + self.position_enc[
-                :, :max_len, :
-            ].expand(batch_size, -1, -1)
+        dec_output = enc_seq + self.position_enc[:enc_seq.shape[1]]
 
         for dec_layer in self.layer_stack_FFT:
             dec_output, _ = dec_layer(dec_output, mask=None, slf_attn_mask=None)
@@ -394,7 +380,8 @@ class LengthRegulator(nn.Module):
         # pad to max length
         if max_length:
             output = F.pad(output, (0, 0, 0, max_length - output.size(1), 0, 0))
-            x_noise = F.pad(x_noise, (0, 0, 0, max_length - x_noise.size(1), 0, 0))
+            if x_noise is not None:
+                x_noise = F.pad(x_noise, (0, 0, 0, max_length - x_noise.size(1), 0, 0))
         return output, x_noise
 
 
