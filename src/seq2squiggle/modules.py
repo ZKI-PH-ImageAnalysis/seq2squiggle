@@ -290,40 +290,32 @@ class NoiseSampler(nn.Module):
         return stdv
 
 
-@jit(nopython=True)
-def create_alignment(base_mat, duration_predictor_output):
+def get_padding_mask(lengths, max_len=None):
     """
-    Create an alignment matrix based on the duration predictions.
-
-    This function fills a base matrix with alignment values based on the
-    durations predicted for each sequence. For each predicted duration,
-    the function updates the corresponding positions in the base matrix.
+    Creates a padding mask for a batch of sequences based on their lengths.
 
     Parameters
     ----------
-    base_mat : np.ndarray
-        The base matrix to be filled with alignment values. It should have
-        shape (N, max_duration, L) where N is the number of sequences,
-        max_duration is the maximum duration predicted, and L is the length of each sequence.
-
-    duration_predictor_output : np.ndarray
-        The predicted durations for each sequence. It should have shape (N, L) where
-        N is the number of sequences and L is the length of each sequence. Each element
-        represents the predicted duration for the corresponding position in the sequence.
+    lengths
+        A tensor containing the lengths of each sequence in the batch. 
+    max_len
+        The maximum length of the sequences. If not provided, it will be set to the maximum value in `lengths`.
 
     Returns
     -------
-    np.ndarray
-        The updated base matrix with alignment values filled in based on the predicted durations.
+    torch.Tensor
+        A boolean tensor of shape (batch_size, max_len) where each element is True if it corresponds
+        to a padding position and False otherwise.
     """
-    N, L = duration_predictor_output.shape
-    for i in range(N):
-        count = 0
-        for j in range(L):
-            for k in range(duration_predictor_output[i][j]):
-                base_mat[i][count + k][j] = 1
-            count = count + duration_predictor_output[i][j]
-    return base_mat
+    
+    if max_len is None:
+        max_len = lengths.max().item()
+
+    # Create a mask by comparing each position index with the sequence lengths
+    ids = torch.arange(max_len, device=lengths.device)
+    mask = ids.unsqueeze(0) < lengths.unsqueeze(1)
+
+    return mask
 
 
 class LengthRegulator(nn.Module):
@@ -379,21 +371,24 @@ class LengthRegulator(nn.Module):
         torch.Tensor
             The length-regulated tensor with the same shape as x.
         """
-        # largest value
-        expand_max_len = torch.max(torch.sum(duration_pred_out, -1), -1)[0]
-        # intialize array filled with 0s, shape (bs, expand_max_len, dna_length)
-        alignment = torch.zeros(
-            duration_pred_out.size(0), expand_max_len, duration_pred_out.size(1)
-        ).numpy()
+        batch_size, input_max_seq_len = duration_pred_out.shape
+        # determine largest value
+        cum_duration = torch.cumsum(duration_pred_out, dim=1)
+        output_max_seq_len = torch.max(cum_duration)
         # create alignment matrix
-        alignment = create_alignment(alignment, duration_pred_out.cpu().numpy())
-        alignment = torch.from_numpy(alignment).to(device)
-        # matrix multp
-        output = alignment @ x
+        cum_duration_reshaped = cum_duration.reshape(batch_size * input_max_seq_len)
+        M = get_padding_mask(cum_duration_reshaped,output_max_seq_len).reshape(
+            batch_size, input_max_seq_len,output_max_seq_len).float() 
+        # adjust the matrix so that it captures the differences between cumulative durations
+        M = torch.diff(M, dim=1, prepend=torch.zeros_like(M[:, :1]))
+        # matrix multip
+        output = torch.bmm(M.permute(0, 2, 1), x)
         # pad to max length
         if max_length:
             output = F.pad(output, (0, 0, 0, max_length - output.size(1), 0, 0))
         return output
+
+
 
     def forward(
         self,
@@ -433,7 +428,9 @@ class LengthRegulator(nn.Module):
                 )
 
         if target is not None:
+            
             output = self.LR(x, target, max_length=max_length)
+            
             if noise_std_prediction is not None:
                 noise_std_prediction = self.LR(
                     noise_std_prediction, target, max_length=max_length
@@ -441,9 +438,11 @@ class LengthRegulator(nn.Module):
         else:
             duration_prediction = duration_predictor_output.detach().clone()
             duration_prediction = torch.round(duration_prediction).int()
+        
             output = self.LR(x, duration_prediction, max_length=max_length)
             if noise_std_prediction is not None:
                 noise_std_prediction = self.LR(
                     noise_std_prediction, duration_prediction, max_length=max_length
                 )
         return output, duration_predictor_output, dist, noise_std_prediction
+
