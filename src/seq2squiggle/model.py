@@ -239,7 +239,8 @@ class seq2squiggle(pl.LightningModule):
         for read, pred in zip(read_id, prediction):
             d.setdefault(read, []).append(pred)
         self.results.append(d)
-        
+
+        self.total_samples += data.shape[0]
         if self.total_samples >= self.export_every_n_samples:
             self.export_and_clear_results(keep_last=True)
             self.total_samples = 0  # Reset sample count
