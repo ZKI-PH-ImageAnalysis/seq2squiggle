@@ -353,7 +353,7 @@ class LengthRegulator(nn.Module):
         self.config = config
         self.duration_sampler = DurationSampler(self.config)
 
-    def LR(self, x, duration_pred_out, max_length=None):
+    def LR(self, x, x_noise, duration_pred_out, max_length=None):
         """
         Regulates the length of the input tensor x based on the duration predictions.
 
@@ -361,6 +361,8 @@ class LengthRegulator(nn.Module):
         ----------
         x : torch.Tensor
             The input tensor with shape (batch_size, max_duration, dna_length).
+        x_noise : torch.Tensor
+            The noise std input tensor with shape (batch_size, max_duration, dna_length).
         duration_pred_out : torch.Tensor
             The tensor with predicted durations, shape (batch_size, dna_length).
         max_length : Optional[int]
@@ -368,7 +370,9 @@ class LengthRegulator(nn.Module):
 
         Returns
         -------
-        torch.Tensor
+        output: torch.Tensor
+            The length-regulated tensor with the same shape as x.
+        output_noise: torch.Tensor
             The length-regulated tensor with the same shape as x.
         """
         batch_size, input_max_seq_len = duration_pred_out.shape
@@ -383,10 +387,15 @@ class LengthRegulator(nn.Module):
         M = torch.diff(M, dim=1, prepend=torch.zeros_like(M[:, :1]))
         # matrix multip
         output = torch.bmm(M.permute(0, 2, 1), x)
+
+        if x_noise is not None:
+            x_noise = torch.bmm(M.permute(0, 2, 1), x_noise)
+
         # pad to max length
         if max_length:
             output = F.pad(output, (0, 0, 0, max_length - output.size(1), 0, 0))
-        return output
+            x_noise = F.pad(x_noise, (0, 0, 0, max_length - x_noise.size(1), 0, 0))
+        return output, x_noise
 
 
 
@@ -428,21 +437,10 @@ class LengthRegulator(nn.Module):
                 )
 
         if target is not None:
-            
-            output = self.LR(x, target, max_length=max_length)
-            
-            if noise_std_prediction is not None:
-                noise_std_prediction = self.LR(
-                    noise_std_prediction, target, max_length=max_length
-                )
+            output, noise_std_prediction = self.LR(x, noise_std_prediction, duration_prediction, max_length=max_length)
         else:
             duration_prediction = duration_predictor_output.detach().clone()
             duration_prediction = torch.round(duration_prediction).int()
-        
-            output = self.LR(x, duration_prediction, max_length=max_length)
-            if noise_std_prediction is not None:
-                noise_std_prediction = self.LR(
-                    noise_std_prediction, duration_prediction, max_length=max_length
-                )
+            output, noise_std_prediction = self.LR(x, noise_std_prediction, duration_prediction, max_length=max_length)
         return output, duration_predictor_output, dist, noise_std_prediction
 
