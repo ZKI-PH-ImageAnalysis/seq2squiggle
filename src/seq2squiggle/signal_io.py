@@ -69,7 +69,7 @@ class BLOW5Writer:
             else:
                 median_before_value = self.median_before
                 offset_value = self.offset
-            signal = signal.cpu().numpy().astype(np.float32)
+            signal = signal.numpy().astype(np.float32)
             signal_raw = np.round(
                 signal * self.digitisation / self.signal_range - self.offset
             )
@@ -168,7 +168,7 @@ class POD5Writer:
             else:
                 median_before_value = self.median_before
                 offset_value = self.offset
-            signal = signal.cpu().numpy().astype(np.float32)
+            signal = signal.numpy().astype(np.float32)
             signal_raw = np.round(
                 signal * self.digitisation / self.signal_range - self.offset
             )

@@ -220,21 +220,21 @@ class seq2squiggle(pl.LightningModule):
         prediction = prediction.squeeze(-1)
         
         if self.noise_std > 0:
-            non_zero_mask = torch.nonzero(prediction)
+            non_zero_mask = prediction != 0
             if self.noise_sampling:
                 noise_std = noise_std_prediction_ext.squeeze() * self.noise_std * self.config["scaling_max_value"]
 
-                gen_noise = noise_std * torch.cuda.FloatTensor(prediction.shape).normal_()
+                gen_noise = torch.normal(mean=0, std=noise_std)
 
                 prediction[non_zero_mask] += gen_noise[non_zero_mask]
-                # TODO Needs additional checks
             else:
-                gen_noise = self.noise_std * torch.cuda.FloatTensor(prediction.shape).normal_()
+                gen_noise = torch.normal(mean=0, std=self.noise_std, size=prediction.shape, device=prediction.device)
 
                 prediction[non_zero_mask] += gen_noise[non_zero_mask]
-                # TODO Needs additional checks
-        prediction.clamp_(min=0)
-    
+        
+        prediction = torch.clamp(prediction, min=0)
+        prediction = prediction.cpu()
+
         d = {}
         for read, pred in zip(read_id, prediction):
             d.setdefault(read, []).append(pred)

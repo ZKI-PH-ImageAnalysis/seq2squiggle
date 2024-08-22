@@ -25,7 +25,6 @@ class ScaledDotProductAttention(nn.Module):
 
         attn = self.softmax(attn)
         output = bmm(attn, v)
-
         return output, attn
 
 
