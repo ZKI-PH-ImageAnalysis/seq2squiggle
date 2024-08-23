@@ -8,10 +8,12 @@ import os
 import numpy as np
 import logging
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, IterableDataset, Dataset
+from torch.utils.data import DataLoader, IterableDataset, Dataset, get_worker_info
+from torch.distributed import init_process_group, get_rank, get_world_size
 from multiprocessing.pool import ThreadPool as Pool
 import itertools
 import multiprocessing
+import torch.distributed as dist
 
 from typing import Tuple, List, Optional, Dict, Generator
 from bisect import bisect
@@ -133,6 +135,14 @@ class PoreDataModule(pl.LightningDataModule):
         return valid_loader
 
     def predict_dataloader(self):
+
+        # dataset = DataParallelIterableDataset()
+        # dataloader_iterable_dataset = DataLoader(dataset, batch_size=4, num_workers=2, shuffle=False)
+        # predict_loader_kwargs = {
+        # "dataset": IterableFastaDataSet(combined_generator, total_l, rank, world_size),
+        # "shuffle": False,
+        # }
+
         predict_loader = DataLoader(
             batch_size=self.batch_size,  # self.batch_size
             num_workers=self.n_workers,
@@ -253,6 +263,53 @@ class ChunkDataSetMemmap(Dataset):
         return self.data_count
 
 
+class DataParallelIterableDataSet(IterableDataset):
+    """
+    A PyTorch `IterableDataset` that wraps an iterable to provide data for prediction.
+    Multi-Threading not implemented yet.
+
+    Parameters
+    ----------
+    iterable : iterable
+        An iterable object that yields data samples.
+    length : int
+        The total length of the dataset.
+
+    Attributes
+    ----------
+    iterable : iterable
+        The iterable object used to provide data samples.
+    length : int
+        The length of the dataset, representing the number of samples.
+
+    Methods
+    -------
+    __iter__()
+        Returns the iterable object itself.
+    __len__()
+        Returns the length of the dataset.
+    """
+    def __init__(self, iterable, length):
+        self.iterable = iterable
+        self.length = length
+
+    def __iter__(self):
+        worker_info = get_worker_info()
+        num_workers = worker_info.num_workers if worker_info is not None else 1
+        worker_id = worker_info.id if worker_info is not None else 0
+        
+        world_size = get_world_size()
+        process_rank = get_rank()
+
+        sampler = DistributedSampler(self, num_replicas=(num_workers * world_size), rank=(process_rank * num_workers + worker_id), shuffle=False)
+
+        for i in iter(sampler):
+            yield i
+
+
+    def __len__(self):
+        return self.length
+
 class IterableFastaDataSet(IterableDataset):
     """
     A PyTorch `IterableDataset` that wraps an iterable to provide data for prediction.
@@ -280,12 +337,25 @@ class IterableFastaDataSet(IterableDataset):
         Returns the length of the dataset.
     """
 
-    def __init__(self, iterable, length):
+    def __init__(self, iterable, length, rank, world_size):
         self.iterable = iterable
         self.length = length
+        self.rank = rank
+        self.world_size = world_size
 
     def __iter__(self):
-        return self.iterable
+        worker_info = get_worker_info()
+        num_workers = worker_info.num_workers if worker_info is not None else 1
+        worker_id = worker_info.id if worker_info is not None else 0
+        
+        world_size = get_world_size()
+        process_rank = get_rank()
+
+        sampler = DistributedSampler(self, num_replicas=(num_workers * world_size), rank=(process_rank * num_workers + worker_id), shuffle=False)
+
+        for i in iter(sampler):
+            yield i
+
 
     def __len__(self):
         return self.length
@@ -379,12 +449,12 @@ def load_fasta(
     combined_generator = itertools.chain(*results)
 
     logger.debug("Splitting the reads to chunks finished.")
-
+    
     predict_loader_kwargs = {
-        "dataset": IterableFastaDataSet(combined_generator, total_l),
+        "dataset": DataParallelIterableDataSet(combined_generator, total_l),
         "shuffle": False,
     }
-
+    
     return predict_loader_kwargs
 
 

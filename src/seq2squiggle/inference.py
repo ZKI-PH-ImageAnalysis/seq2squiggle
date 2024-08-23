@@ -273,6 +273,7 @@ def inference_run(
     -------
     None
     """
+
     writer, export_every_n_samples = get_writer(
         out, profile, ideal_event_length, export_every_n_samples
     )
@@ -312,11 +313,15 @@ def inference_run(
         data_dir=reads,
         total_l=total_l,
         batch_size=predict_batch_size,
-        n_workers=1,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
+        n_workers=4,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
     )
 
     # "gamma_cpu" not implemented for 'BFloat16'
     precision = "16-mixed" if torch.cuda.device_count() >= 1 else "64"
+
+    # dataset = DataParallelIterableDataset()
+    # dataloader_iterable_dataset = DataLoader(dataset, batch_size=4, num_workers=2, shuffle=False)
+    # train_dataloaders=dataloader_iterable_dataset
 
     trainer = pl.Trainer(
         accelerator="auto",
@@ -325,6 +330,18 @@ def inference_run(
         logger=False,
         strategy=_get_strategy(),
     )
+
+    rank = trainer.global_rank
+    world_size = trainer.world_size
+    # TODO Option 1 THese now need to be given to PoreDataModule and again to IterableDataset
+    print(rank, world_size)
+
+    # TODO Option 2 If that does not work correctly?
+    # Use init_process(rank)
+    # See https://colab.research.google.com/drive/1OFLZnX9y5QUFNONuvFsxOizq4M-tFvk-?usp=sharing#scrollTo=59r9XHsSHpG3
+    # https://github.com/Lightning-AI/pytorch-lightning/issues/15734#issuecomment-1500327076
+    # 
+    exit()
 
     trainer.predict(model=load_model, datamodule=fasta_data, return_predictions=False)
 
@@ -345,3 +362,5 @@ def _get_strategy():
     if torch.cuda.device_count() > 1:
         return DDPStrategy(find_unused_parameters=False, static_graph=True)
     return "auto"
+
+
