@@ -233,7 +233,6 @@ class seq2squiggle(pl.LightningModule):
                 prediction[non_zero_mask] += gen_noise[non_zero_mask]
         
         prediction = torch.clamp(prediction, min=0)
-        prediction = prediction.cpu()
 
         d = {}
         for read, pred in zip(read_id, prediction):
