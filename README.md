@@ -2,11 +2,11 @@
 
 `seq2squiggle` is a deep learning-based tool for generating artifical nanopore signals from DNA sequence data.
 
-<img src="/img/seq2squiggle_architecture.png" width="750">
+<img src="/img/seq2squiggle.png" width="750">
 
 
 Please cite the following publication if you use `seq2squiggle` in your work:
-- Beslic,  D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Körber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
+- Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renard, B. Y., & Körber, N. (2024). End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv. doi:10.1101/2024.08.12.607296 
 
 ## Installation 
 
