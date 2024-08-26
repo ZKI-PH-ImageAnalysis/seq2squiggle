@@ -8,7 +8,7 @@ import os
 import numpy as np
 import logging
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, IterableDataset, Dataset, get_worker_info
+from torch.utils.data import DataLoader, IterableDataset, Dataset, get_worker_info, DistributedSampler
 from torch.distributed import init_process_group, get_rank, get_world_size
 from multiprocessing.pool import ThreadPool as Pool
 import itertools
@@ -84,6 +84,8 @@ class PoreDataModule(pl.LightningDataModule):
         valid_dir: str = "path/to/dir",
         batch_size: int = 128,
         n_workers: int = 1,
+        rank: int = 0,
+        world_size: int = 1,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -92,6 +94,8 @@ class PoreDataModule(pl.LightningDataModule):
         self.config = config
         self.n_workers = n_workers
         self.total_l = total_l
+        self.rank = rank
+        self.world_size = world_size
 
     def setup(self, stage: str):
         if stage in ("fit", "validate"):
@@ -110,7 +114,7 @@ class PoreDataModule(pl.LightningDataModule):
         if stage in (None, "predict"):
             logger.debug("Loading fasta started")
             self.predict_loader_kwargs = load_fasta(
-                self.data_dir, self.config, self.total_l
+                self.data_dir, self.config, self.total_l, self.rank, self.world_size
             )
             logger.debug("Loading fasta ended")
 
@@ -289,22 +293,27 @@ class DataParallelIterableDataSet(IterableDataset):
     __len__()
         Returns the length of the dataset.
     """
-    def __init__(self, iterable, length):
+    def __init__(self, iterable, length, rank, world_size):
         self.iterable = iterable
         self.length = length
+        self.rank = rank
+        self.world_size = world_size
 
     def __iter__(self):
         worker_info = get_worker_info()
-        num_workers = worker_info.num_workers if worker_info is not None else 1
-        worker_id = worker_info.id if worker_info is not None else 0
+        if worker_info is not None:
+            num_workers = worker_info.num_workers
+            worker_id = get_worker_info().id
+            world_size = self.world_size
+            rank = self.rank
         
-        world_size = get_world_size()
-        process_rank = get_rank()
+        if worker_info is not None:
+            if rank == 0:
+                self.iterable = itertools.islice(self.iterable, worker_id, None, (num_workers * world_size))
+            else:
+                self.iterable = itertools.islice(self.iterable, worker_id + (num_workers * rank), None, (num_workers * world_size))
 
-        sampler = DistributedSampler(self, num_replicas=(num_workers * world_size), rank=(process_rank * num_workers + worker_id), shuffle=False)
-
-        for i in iter(sampler):
-            yield i
+        return self.iterable
 
 
     def __len__(self):
@@ -337,24 +346,12 @@ class IterableFastaDataSet(IterableDataset):
         Returns the length of the dataset.
     """
 
-    def __init__(self, iterable, length, rank, world_size):
+    def __init__(self, iterable, length):
         self.iterable = iterable
         self.length = length
-        self.rank = rank
-        self.world_size = world_size
 
     def __iter__(self):
-        worker_info = get_worker_info()
-        num_workers = worker_info.num_workers if worker_info is not None else 1
-        worker_id = worker_info.id if worker_info is not None else 0
-        
-        world_size = get_world_size()
-        process_rank = get_rank()
-
-        sampler = DistributedSampler(self, num_replicas=(num_workers * world_size), rank=(process_rank * num_workers + worker_id), shuffle=False)
-
-        for i in iter(sampler):
-            yield i
+        return self.iterable
 
 
     def __len__(self):
@@ -405,7 +402,7 @@ def process_read(
 
 
 def load_fasta(
-    fasta: List[Tuple[str, str]], config: Dict, total_l: int
+    fasta: List[Tuple[str, str]], config: Dict, total_l: int, rank:int, world_size:int
 ) -> Dict[str, "DataLoader"]:
     """
     Loads and processes FASTA files into a dataset for prediction, using parallel processing.
@@ -451,7 +448,8 @@ def load_fasta(
     logger.debug("Splitting the reads to chunks finished.")
     
     predict_loader_kwargs = {
-        "dataset": DataParallelIterableDataSet(combined_generator, total_l),
+        # "dataset": DataParallelIterableDataSet(combined_generator, total_l, rank, world_size),
+        "dataset": IterableFastaDataSet(combined_generator, total_l),
         "shuffle": False,
     }
     

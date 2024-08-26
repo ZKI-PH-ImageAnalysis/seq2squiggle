@@ -308,20 +308,9 @@ def inference_run(
 
     reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed)
 
-    fasta_data = PoreDataModule(
-        config=config,
-        data_dir=reads,
-        total_l=total_l,
-        batch_size=predict_batch_size,
-        n_workers=4,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
-    )
 
     # "gamma_cpu" not implemented for 'BFloat16'
     precision = "16-mixed" if torch.cuda.device_count() >= 1 else "64"
-
-    # dataset = DataParallelIterableDataset()
-    # dataloader_iterable_dataset = DataLoader(dataset, batch_size=4, num_workers=2, shuffle=False)
-    # train_dataloaders=dataloader_iterable_dataset
 
     trainer = pl.Trainer(
         accelerator="auto",
@@ -333,15 +322,16 @@ def inference_run(
 
     rank = trainer.global_rank
     world_size = trainer.world_size
-    # TODO Option 1 THese now need to be given to PoreDataModule and again to IterableDataset
-    print(rank, world_size)
 
-    # TODO Option 2 If that does not work correctly?
-    # Use init_process(rank)
-    # See https://colab.research.google.com/drive/1OFLZnX9y5QUFNONuvFsxOizq4M-tFvk-?usp=sharing#scrollTo=59r9XHsSHpG3
-    # https://github.com/Lightning-AI/pytorch-lightning/issues/15734#issuecomment-1500327076
-    # 
-    exit()
+    fasta_data = PoreDataModule(
+        config=config,
+        data_dir=reads,
+        total_l=total_l,
+        batch_size=predict_batch_size,
+        n_workers=1,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
+        rank=rank,
+        world_size=world_size,
+    )
 
     trainer.predict(model=load_model, datamodule=fasta_data, return_predictions=False)
 
