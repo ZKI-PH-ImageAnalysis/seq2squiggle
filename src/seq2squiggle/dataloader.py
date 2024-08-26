@@ -139,16 +139,8 @@ class PoreDataModule(pl.LightningDataModule):
         return valid_loader
 
     def predict_dataloader(self):
-
-        # dataset = DataParallelIterableDataset()
-        # dataloader_iterable_dataset = DataLoader(dataset, batch_size=4, num_workers=2, shuffle=False)
-        # predict_loader_kwargs = {
-        # "dataset": IterableFastaDataSet(combined_generator, total_l, rank, world_size),
-        # "shuffle": False,
-        # }
-
         predict_loader = DataLoader(
-            batch_size=self.batch_size,  # self.batch_size
+            batch_size=self.batch_size,
             num_workers=self.n_workers,
             pin_memory=True,
             **self.predict_loader_kwargs,
