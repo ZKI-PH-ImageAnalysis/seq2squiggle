@@ -8,10 +8,12 @@ import os
 import numpy as np
 import logging
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, IterableDataset, Dataset
+from torch.utils.data import DataLoader, IterableDataset, Dataset, get_worker_info, DistributedSampler
+from torch.distributed import init_process_group, get_rank, get_world_size
 from multiprocessing.pool import ThreadPool as Pool
 import itertools
 import multiprocessing
+import torch.distributed as dist
 
 from typing import Tuple, List, Optional, Dict, Generator
 from bisect import bisect
@@ -82,6 +84,8 @@ class PoreDataModule(pl.LightningDataModule):
         valid_dir: str = "path/to/dir",
         batch_size: int = 128,
         n_workers: int = 1,
+        rank: int = 0,
+        world_size: int = 1,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -90,6 +94,8 @@ class PoreDataModule(pl.LightningDataModule):
         self.config = config
         self.n_workers = n_workers
         self.total_l = total_l
+        self.rank = rank
+        self.world_size = world_size
 
     def setup(self, stage: str):
         if stage in ("fit", "validate"):
@@ -108,7 +114,7 @@ class PoreDataModule(pl.LightningDataModule):
         if stage in (None, "predict"):
             logger.debug("Loading fasta started")
             self.predict_loader_kwargs = load_fasta(
-                self.data_dir, self.config, self.total_l
+                self.data_dir, self.config, self.total_l, self.rank, self.world_size
             )
             logger.debug("Loading fasta ended")
 
@@ -134,7 +140,7 @@ class PoreDataModule(pl.LightningDataModule):
 
     def predict_dataloader(self):
         predict_loader = DataLoader(
-            batch_size=self.batch_size,  # self.batch_size
+            batch_size=self.batch_size,
             num_workers=self.n_workers,
             pin_memory=True,
             **self.predict_loader_kwargs,
@@ -253,6 +259,58 @@ class ChunkDataSetMemmap(Dataset):
         return self.data_count
 
 
+class DataParallelIterableDataSet(IterableDataset):
+    """
+    A PyTorch `IterableDataset` that wraps an iterable to provide data for prediction.
+    Multi-Threading not implemented yet.
+
+    Parameters
+    ----------
+    iterable : iterable
+        An iterable object that yields data samples.
+    length : int
+        The total length of the dataset.
+
+    Attributes
+    ----------
+    iterable : iterable
+        The iterable object used to provide data samples.
+    length : int
+        The length of the dataset, representing the number of samples.
+
+    Methods
+    -------
+    __iter__()
+        Returns the iterable object itself.
+    __len__()
+        Returns the length of the dataset.
+    """
+    def __init__(self, iterable, length, rank, world_size):
+        self.iterable = iterable
+        self.length = length
+        self.rank = rank
+        self.world_size = world_size
+
+    def __iter__(self):
+        worker_info = get_worker_info()
+        if worker_info is not None:
+            num_workers = worker_info.num_workers
+            worker_id = get_worker_info().id
+            world_size = self.world_size
+            rank = self.rank
+        
+        if worker_info is not None:
+            if rank == 0:
+                self.iterable = itertools.islice(self.iterable, worker_id, None, (num_workers * world_size))
+            else:
+                self.iterable = itertools.islice(self.iterable, worker_id + (num_workers * rank), None, (num_workers * world_size))
+
+        return self.iterable
+
+
+    def __len__(self):
+        return self.length
+
 class IterableFastaDataSet(IterableDataset):
     """
     A PyTorch `IterableDataset` that wraps an iterable to provide data for prediction.
@@ -286,6 +344,7 @@ class IterableFastaDataSet(IterableDataset):
 
     def __iter__(self):
         return self.iterable
+
 
     def __len__(self):
         return self.length
@@ -335,7 +394,7 @@ def process_read(
 
 
 def load_fasta(
-    fasta: List[Tuple[str, str]], config: Dict, total_l: int
+    fasta: List[Tuple[str, str]], config: Dict, total_l: int, rank:int, world_size:int
 ) -> Dict[str, "DataLoader"]:
     """
     Loads and processes FASTA files into a dataset for prediction, using parallel processing.
@@ -379,12 +438,13 @@ def load_fasta(
     combined_generator = itertools.chain(*results)
 
     logger.debug("Splitting the reads to chunks finished.")
-
+    
     predict_loader_kwargs = {
+        # "dataset": DataParallelIterableDataSet(combined_generator, total_l, rank, world_size),
         "dataset": IterableFastaDataSet(combined_generator, total_l),
         "shuffle": False,
     }
-
+    
     return predict_loader_kwargs
 
 

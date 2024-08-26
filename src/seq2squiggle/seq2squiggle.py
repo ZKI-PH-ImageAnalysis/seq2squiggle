@@ -300,7 +300,7 @@ def train(
 )
 @click.option(
     "--export-every-n-samples",
-    default=500000,
+    default=1000000,
     show_default=True,
     type=int,
     help="Specify how often the predicted samples (chunk) should be saved to output file. Increasing it will reduce runtime and increase memory consumption.",
