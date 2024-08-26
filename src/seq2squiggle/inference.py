@@ -273,6 +273,7 @@ def inference_run(
     -------
     None
     """
+
     writer, export_every_n_samples = get_writer(
         out, profile, ideal_event_length, export_every_n_samples
     )
@@ -307,13 +308,6 @@ def inference_run(
 
     reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed)
 
-    fasta_data = PoreDataModule(
-        config=config,
-        data_dir=reads,
-        total_l=total_l,
-        batch_size=predict_batch_size,
-        n_workers=1,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
-    )
 
     # "gamma_cpu" not implemented for 'BFloat16'
     precision = "16-mixed" if torch.cuda.device_count() >= 1 else "64"
@@ -324,6 +318,19 @@ def inference_run(
         devices="auto",
         logger=False,
         strategy=_get_strategy(),
+    )
+
+    rank = trainer.global_rank
+    world_size = trainer.world_size
+
+    fasta_data = PoreDataModule(
+        config=config,
+        data_dir=reads,
+        total_l=total_l,
+        batch_size=predict_batch_size,
+        n_workers=1,  # n_workers > 1 causes incorrect order of IterableDataset + slower than single process
+        rank=rank,
+        world_size=world_size,
     )
 
     trainer.predict(model=load_model, datamodule=fasta_data, return_predictions=False)
@@ -345,3 +352,5 @@ def _get_strategy():
     if torch.cuda.device_count() > 1:
         return DDPStrategy(find_unused_parameters=False, static_graph=True)
     return "auto"
+
+

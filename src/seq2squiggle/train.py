@@ -104,7 +104,6 @@ def train_run(
         logger=wandb_logger,
         gradient_clip_val=config["gradient_clip_val"],
         strategy=_get_strategy(),
-        #num_nodes=2,
     )
 
     trainer.fit(fft_model, poredata)
