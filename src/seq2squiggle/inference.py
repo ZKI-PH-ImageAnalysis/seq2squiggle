@@ -18,7 +18,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from .signal_io import BLOW5Writer, POD5Writer
 from .model import seq2squiggle
-from .utils import get_reads
+from .utils import get_reads, get_profile, update_profile
 from .train import DDPStrategy
 from .dataloader import PoreDataModule
 from . import __version__
@@ -227,6 +227,13 @@ def inference_run(
     distr: str,
     predict_batch_size: int,
     export_every_n_samples: int,
+    sample_rate: int,
+    digitisation: int,
+    range_val: float,
+    offset_mean: float,
+    offset_std: float,
+    median_before_mean: float,
+    median_before_std: float,
     seed: int,
 ):
     """
@@ -266,6 +273,8 @@ def inference_run(
         Batch size for predictions.
     export_every_n_samples : int
         Number of samples after which to export data.
+    sampling_rate : int
+        sampling rate
     seed : int
         Random seed for reproducibility.
 
@@ -274,8 +283,19 @@ def inference_run(
     None
     """
 
+
+
+    profile_dict = get_profile(profile)
+    profile_dict = update_profile(profile_dict, sample_rate=sample_rate,
+        digitisation=digitisation,
+        range=range_val,
+        offset_mean=offset_mean,
+        offset_std=offset_std,
+        median_before_mean=median_before_mean,
+        median_before_std=median_before_std)
+
     writer, export_every_n_samples = get_writer(
-        out, profile, ideal_event_length, export_every_n_samples
+        out, profile_dict, ideal_event_length, export_every_n_samples
     )
 
     if saved_weights is None:

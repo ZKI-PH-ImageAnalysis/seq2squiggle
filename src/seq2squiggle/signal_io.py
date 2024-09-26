@@ -32,14 +32,13 @@ class BLOW5Writer:
         self.profile: dict = profile
         self.ideal_event_length = ideal_event_length
         self.signals = None
-        self.profile_d = get_profile(self.profile)
-        self.median_before = float(self.profile_d["median_before_mean"])
-        self.median_before_std = float(self.profile_d["median_before_std"])
-        self.offset = float(self.profile_d["offset_mean"])
-        self.offset_std = float(self.profile_d["offset_std"])
-        self.digitisation = float(self.profile_d["digitisation"])
-        self.signal_range = float(self.profile_d["range"])
-        self.sample_rate = float(self.profile_d["sample_rate"])
+        self.median_before = float(self.profile["median_before_mean"])
+        self.median_before_std = float(self.profile["median_before_std"])
+        self.offset = float(self.profile["offset_mean"])
+        self.offset_std = float(self.profile["offset_std"])
+        self.digitisation = float(self.profile["digitisation"])
+        self.signal_range = float(self.profile["range"])
+        self.sample_rate = float(self.profile["sample_rate"])
         self.start_time = 0
 
     def save(self):
@@ -116,14 +115,13 @@ class POD5Writer:
         self.profile: dict = profile
         self.ideal_event_length = ideal_event_length
         self.signals = None
-        self.profile_d = get_profile(self.profile)
-        self.median_before = float(self.profile_d["median_before_mean"])
-        self.median_before_std = float(self.profile_d["median_before_std"])
-        self.offset = float(self.profile_d["offset_mean"])
-        self.offset_std = float(self.profile_d["offset_std"])
-        self.digitisation = float(self.profile_d["digitisation"])
-        self.signal_range = float(self.profile_d["range"])
-        self.sample_rate = float(self.profile_d["sample_rate"])
+        self.median_before = float(self.profile["median_before_mean"])
+        self.median_before_std = float(self.profile["median_before_std"])
+        self.offset = float(self.profile["offset_mean"])
+        self.offset_std = float(self.profile["offset_std"])
+        self.digitisation = float(self.profile["digitisation"])
+        self.signal_range = float(self.profile["range"])
+        self.sample_rate = float(self.profile["sample_rate"])
         self.start_time = 0
 
     def save(self):

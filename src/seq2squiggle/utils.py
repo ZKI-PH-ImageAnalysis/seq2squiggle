@@ -144,7 +144,7 @@ def get_profile(profile):
     profiles = {
         "minion_r10_dna": {
             "digitisation": 8192,
-            "sample_rate": 4000,
+            "sample_rate": 5000,
             "range": 1536.598389,
             "offset_mean": 13.380569389019,
             "offset_std": 16.311471649012,
@@ -153,7 +153,7 @@ def get_profile(profile):
         },
         "prom_r10_dna": {
             "digitisation": 2048,
-            "sample_rate": 4000,
+            "sample_rate": 5000,
             "range": 281.345551,
             "offset_mean": -127.5655735,
             "offset_std": 19.377283387665,
@@ -166,6 +166,34 @@ def get_profile(profile):
         return profiles[profile]
     else:
         logger.error(f"Incorrect value for profile: {profile}")
+
+
+def update_profile(profile_dict, **kwargs):
+    """
+    Update the profile dictionary with the provided parameters.
+
+    Any parameter in kwargs that is not None will replace the corresponding 
+    value in the profile_dict.
+
+    -------
+    Arguments
+    dict
+        The current profile dictionary to update
+    kwargs
+        The parameters to update in the profile dictionary
+
+    -------
+    Returns
+    dict
+        The updated profile dictionary
+    """
+    for key, value in kwargs.items():
+        if value is not None and key in profile_dict:
+            profile_dict[key] = value
+        elif key not in profile_dict:
+            logger.warning(f"Warning: {key} is not a valid key in the profile")
+    
+    return profile_dict
 
 
 def regular_break_points(n, chunk_len, overlap=0, align="left"):
