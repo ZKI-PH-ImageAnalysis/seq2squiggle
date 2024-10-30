@@ -424,7 +424,7 @@ class LengthRegulator(nn.Module):
                 )
 
         if target is not None:
-            output, noise_std_prediction = self.LR(x, noise_std_prediction, duration_prediction, max_length=max_length)
+            output, noise_std_prediction = self.LR(x, noise_std_prediction, target, max_length=max_length)
         else:
             duration_prediction = duration_predictor_output.detach().clone()
             duration_prediction = torch.round(duration_prediction).int()

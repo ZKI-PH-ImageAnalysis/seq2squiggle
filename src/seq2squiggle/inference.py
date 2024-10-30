@@ -283,8 +283,6 @@ def inference_run(
     None
     """
 
-
-
     profile_dict = get_profile(profile)
     profile_dict = update_profile(profile_dict, sample_rate=sample_rate,
         digitisation=digitisation,
