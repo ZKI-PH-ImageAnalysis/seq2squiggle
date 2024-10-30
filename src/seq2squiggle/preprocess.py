@@ -177,28 +177,15 @@ def load_numpy_datasets(
         A tuple containing numpy arrays for chunks, targets, chunks lengths, targets lengths, and standard deviations.
     """
 
-    data = np.load(path)
-    chunks = data["chunks"]
-    c_lengths = data["chunks_lengths"]
-    targets = data["targets"]
-    t_lengths = data["targets_lengths"]
-    stdevs = data["stdevs"]
-    data.close()
-
-    if limit:
-        chunks = chunks[:limit]
-        targets = targets[:limit]
-        c_lengths = c_lengths[:limit]
-        t_lengths = t_lengths[:limit]
-        stdevs = stdevs[:limit]
-
-    return (
-        np.array(chunks),
-        np.array(targets),
-        np.array(c_lengths),
-        np.array(t_lengths),
-        np.array(stdevs),
-    )
+    with np.load(path, allow_pickle=False) as data:
+        slices = slice(None, limit)
+        return (
+            np.array(data.get("chunks", [])[slices]),
+            np.array(data.get("targets", [])[slices]),
+            np.array(data.get("chunks_lengths", [])[slices]),
+            np.array(data.get("targets_lengths", [])[slices]),
+            np.array(data.get("stdevs", [])[slices]),
+        )
 
 
 def save_chunks(chunks, output_directory: str) -> None:
@@ -218,23 +205,21 @@ def save_chunks(chunks, output_directory: str) -> None:
     """
     os.makedirs(output_directory, exist_ok=True)
 
-    np.save(os.path.join(output_directory, "chunks.npy"), chunks.chunks.squeeze(1))
-    np.save(
-        os.path.join(output_directory, "chunks_lengths.npy"),
-        chunks.c_lengths.squeeze(1),
-    )
-    np.save(os.path.join(output_directory, "targets.npy"), chunks.targets)
-    np.save(os.path.join(output_directory, "targets_lengths.npy"), chunks.t_lengths)
-    np.save(os.path.join(output_directory, "stdevs.npy"), chunks.stdevs)
+    # Define file names and their corresponding data attributes
+    data_map = {
+        "chunks": chunks.chunks.squeeze(1),
+        "chunks_lengths": chunks.c_lengths.squeeze(1),
+        "targets": chunks.targets,
+        "targets_lengths": chunks.t_lengths,
+        "stdevs": chunks.stdevs,
+    }
+
+    # Save and log each attribute
+    for name, data in data_map.items():
+        np.save(os.path.join(output_directory, f"{name}.npy"), data)
+        logger.debug(f"  - {name}.npy with shape {data.shape}")
 
     logger.debug(f"> data written to: {output_directory}")
-    logger.debug(f"  - chunks.npy with shape {chunks.chunks.squeeze(1).shape}")
-    logger.debug(
-        f"  - chunks_lengths.npy with shape {chunks.c_lengths.squeeze(1).shape}"
-    )
-    logger.debug(f"  - targets.npy with shape {chunks.targets.shape}")
-    logger.debug(f"  - targets_lengths.npy shape {chunks.t_lengths.shape}")
-    logger.debug(f"  - stdevs.npy shape {chunks.stdevs.shape}")
 
 
 def save_chunks_in_batches(chunks, output_directory: str, counter: int = 0) -> None:
@@ -255,34 +240,20 @@ def save_chunks_in_batches(chunks, output_directory: str, counter: int = 0) -> N
     None
     """
     os.makedirs(output_directory, exist_ok=True)
-    np.save(
-        os.path.join(output_directory, f"chunks-{counter:04d}.npy"),
-        chunks.chunks.squeeze(1),
-    )
-    np.save(
-        os.path.join(output_directory, f"chunks_lengths-{counter:04d}.npy"),
-        chunks.c_lengths.squeeze(1),
-    )
-    np.save(
-        os.path.join(output_directory, f"targets-{counter:04d}.npy"), chunks.targets
-    )
-    np.save(
-        os.path.join(output_directory, f"targets_lengths-{counter:04d}.npy"),
-        chunks.t_lengths,
-    )
-    np.save(
-        os.path.join(output_directory, f"stdevs-{counter:04d}.npy"),
-        chunks.stdevs,
-    )
+
+    data_map = {
+        "chunks": chunks.chunks.squeeze(1),
+        "chunks_lengths": chunks.c_lengths.squeeze(1),
+        "targets": chunks.targets,
+        "targets_lengths": chunks.t_lengths,
+        "stdevs": chunks.stdevs,
+    }
+
+    for name, data in data_map.items():
+        np.save(os.path.join(output_directory, f"{name}-{counter:04d}.npy"), data)
+        logger.debug(f"  - {name}.npy with shape {data.shape}")
 
     logger.debug(f"> data written to: {output_directory}")
-    logger.debug(f"  - chunks.npy with shape {chunks.chunks.squeeze(1).shape}")
-    logger.debug(
-        f"  - chunks_lengths.npy with shape {chunks.c_lengths.squeeze(1).shape}"
-    )
-    logger.debug(f"  - targets.npy with shape {chunks.targets.shape}")
-    logger.debug(f"  - targets_lengths.npy shape {chunks.t_lengths.shape}")
-    logger.debug(f"  - stdevs.npy shape {chunks.t_lengths.shape}")
 
 
 def get_chunks(
@@ -365,23 +336,30 @@ def get_kmer(dna_seq: List[str], kmer_size: int) -> List[str]:
     list of str
         List of k-mer sequences of the specified size.
     """
-    if kmer_size == 9:
-        return dna_seq
-    elif kmer_size == 8:
-        return [i[1:] for i in dna_seq]
-    elif kmer_size == 7:
-        return [i[1:-1] for i in dna_seq]
-    elif kmer_size == 6:
-        return [i[2:-1] for i in dna_seq]
-    elif kmer_size == 5:
-        return [i[3:-1] for i in dna_seq]
-    elif kmer_size == 4:
-        return [i[4:-1] for i in dna_seq]
-    elif kmer_size == 3:
-        return [i[5:-1] for i in dna_seq]
+    if not (3 <= kmer_size <= 9):
+        logger.error(f"Choose a kmer value between 3 and 9. You chose {kmer_size}")
+        raise ValueError(f"Choose a kmer value between 3 and 9. You chose {kmer_size}")
+
+    # Check the length of the first sequence
+    seq_length = len(dna_seq[0])
+
+    # for R9
+    if seq_length == 6:
+        slice_map = {6: slice(None), 5: slice(0, -1), 4: slice(1, -1), 3: slice(1, 4)}
+    # for R10
+    elif seq_length == 9:
+        slice_map = {9: slice(None), 8: slice(1, None), 7: slice(1, -1), 6: slice(2, -1),
+                     5: slice(3, -1), 4: slice(4, -1), 3: slice(5, -1)}
     else:
-        logger.error(f"Choose a kmer value between 3 and 9. You choose {kmer_size}")
-        raise ValueError(f"Choose a kmer value between 3 and 9. You choose {kmer_size}")
+        logger.error("Sequence length should be 6 (R9.4) or 9 (R10.4).")
+        raise ValueError("Sequence length should be 6 (R9.4) or 9 (R10.4).")
+
+    if kmer_size > seq_length:
+        logger.error(f"kmer_size {kmer_size} is larger than the sequence length {seq_length}.")
+        raise ValueError(f"kmer_size {kmer_size} is larger than the sequence length {seq_length}.")
+
+    return [seq[slice_map[kmer_size]] for seq in dna_seq]
+    
 
 
 def process_df(
@@ -407,7 +385,7 @@ def process_df(
         - Array of standard deviations for each event.
     """
     # Filter out artifacts of uncalled4 signal processing
-    df = df.sort(["position"]).filter(pl.col("model_kmer") != ("N" * 9))
+    df = df.sort(["position"]).filter(pl.col("model_kmer") != ("N" * config["seq_kmer"]))
 
     # add 0s so that remainder is 0
     df = df.with_columns(pl.col("end_idx").sub(pl.col("start_idx")).alias("signal_len"))
