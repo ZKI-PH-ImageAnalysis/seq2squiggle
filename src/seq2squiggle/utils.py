@@ -160,6 +160,24 @@ def get_profile(profile):
             "median_before_mean": 189.87607393756,
             "median_before_std": 15.788097978713,
         },
+        "prom_r9_dna": {
+            "digitisation": 2048,
+            "sample_rate": 4000,
+            "range": 748.5801,
+            "offset_mean": -237.4102,
+            "offset_std": 14.1575,
+            "median_before_mean": 214.2890337,
+            "median_before_std": 18.0127916,
+        },
+        "minion_r9_dna": {
+            "digitisation": 8192,
+            "sample_rate": 4000,
+            "range": 1443.030273,
+            "offset_mean": 13.7222605,
+            "offset_std": 10.25279688,
+            "median_before_mean": 200.815801,
+            "median_before_std": 20.48933762,
+        },
     }
 
     if profile in profiles:
