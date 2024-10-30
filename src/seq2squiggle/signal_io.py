@@ -172,7 +172,7 @@ class POD5Writer:
             )
             signal_raw = signal_raw.astype(np.int16)
 
-            pore = pod5.Pore(channel=123, well=3, pore_type="pore_type")
+            pore = pod5.Pore(channel=123, well=3, pore_type="not_set")
             calibration = pod5.Calibration(
                 offset=offset_value, scale=(self.signal_range / self.digitisation)
             )
