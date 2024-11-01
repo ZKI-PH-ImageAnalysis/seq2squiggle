@@ -50,7 +50,7 @@ def n_workers() -> int:
     return n_cpu // n_gpu if (n_gpu := torch.cuda.device_count()) > 1 else n_cpu
 
 
-def one_hot_encode(sequences: List[str]) -> np.ndarray:
+def one_hot_encode(sequences: List[str], seq_len: int) -> np.ndarray:
     """
     One-hot encodes a list of DNA sequences.
 
@@ -58,6 +58,8 @@ def one_hot_encode(sequences: List[str]) -> np.ndarray:
     ----------
     sequences : list of str
         A list where each string is a DNA sequence containing characters from {"_", "A", "C", "G", "T"}.
+    seq_len: int
+        Length of the input k-mer sequences
 
     Returns
     -------
@@ -73,7 +75,7 @@ def one_hot_encode(sequences: List[str]) -> np.ndarray:
 
     # Initialize an empty array to store the one-hot encoded sequences
     n_outer_sequences = len(sequences)
-    one_hot_encoded = np.zeros((n_outer_sequences, 9, n_letters), dtype=np.float16)
+    one_hot_encoded = np.zeros((n_outer_sequences, seq_len, n_letters), dtype=np.float16)
 
     # Iterate through each outer sequence and its inner sequences, and one-hot encode them
     for i, outer_sequence in enumerate(sequences):
@@ -301,7 +303,7 @@ def add_remainder(x, max_dna, k):
 def split_sequence(x, config):
     x = extract_kmers(x, config["seq_kmer"])
     x = add_remainder(x, config["max_dna_len"], config["seq_kmer"])
-    x = one_hot_encode(x)
+    x = one_hot_encode(x, config["seq_kmer"])
     breakpoints = regular_break_points(len(x), config["max_dna_len"], align="left")
     x_breaks = np.array([x[i:j] for (i, j) in breakpoints])
     return x_breaks

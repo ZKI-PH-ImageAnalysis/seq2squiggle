@@ -396,7 +396,7 @@ def process_df(
     signal_len = df.select(pl.col(["signal_len"])).to_numpy().squeeze()
 
     # process DNA
-    dna_seq = df["model_kmer"].to_list()
+    dna_seq = df["model_kmer"].to_list()    
 
     # Add remainder
     remain = config["max_dna_len"] - (len(dna_seq) % config["max_dna_len"])
@@ -404,7 +404,7 @@ def process_df(
     dna_seq = dna_seq + zero_array
 
     # One hot encode sequence
-    dna_seq = one_hot_encode(dna_seq)
+    dna_seq = one_hot_encode(dna_seq, len(dna_seq[0]))
 
     # Process the signal
     signal = df["samples"].to_list()
