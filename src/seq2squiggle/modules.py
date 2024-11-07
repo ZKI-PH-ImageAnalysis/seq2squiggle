@@ -67,6 +67,7 @@ class Encoder(nn.Module):
         batch_size, max_len = src_seq.shape[0], src_seq.shape[1]
         enc_slf_attn_list = []
 
+        src_seq = src_seq.float()  
         
         src_seq = self.src_emb(src_seq)
         src_seq = self.relu(src_seq)

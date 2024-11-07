@@ -328,7 +328,7 @@ def inference_run(
 
 
     # "gamma_cpu" not implemented for 'BFloat16'
-    precision = "16-mixed" if torch.cuda.device_count() >= 1 else "64"
+    precision = "16-mixed" if torch.cuda.device_count() >= 1 else "32"
 
     trainer = pl.Trainer(
         accelerator="auto",

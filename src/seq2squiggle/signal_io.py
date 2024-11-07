@@ -132,6 +132,8 @@ class POD5Writer:
             logger.warning("POD5 was not exported. No signals were found")
             raise ValueError("POD5 was not exported. No signals were found")
 
+        
+
         run_info = pod5.RunInfo(
             acquisition_id="",  # f5d5051ec9f7983c76e78543f720289d2988ce48
             acquisition_start_time=datetime.now(),
@@ -154,6 +156,7 @@ class POD5Writer:
             system_type="",  # Windows 10.0
             tracking_id={},
         )
+
 
         pod5_reads = []
 

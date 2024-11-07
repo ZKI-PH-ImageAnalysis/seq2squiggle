@@ -15,6 +15,7 @@ import numpy as np
 
 from .modules import Encoder, LengthRegulator, Decoder, NoiseSampler
 from .utils import generate_validation_plots
+from .signal_io import BLOW5Writer
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -240,7 +241,7 @@ class seq2squiggle(pl.LightningModule):
         self.results.append(d)
 
         self.total_samples += data.shape[0]
-        if self.total_samples >= self.export_every_n_samples:
+        if isinstance(self.out_writer, BLOW5Writer) and self.total_samples >= self.export_every_n_samples:
             self.export_and_clear_results(keep_last=True)
             self.total_samples = 0  # Reset sample count
     
