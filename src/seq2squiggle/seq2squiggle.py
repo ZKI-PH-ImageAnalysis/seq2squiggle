@@ -224,10 +224,18 @@ def conditional_option(f):
         hidden=True  # Hidden by default
     )(f)
     f = click.option(
-        "--ideal-event-length",
-        default=-1.0,
+        "--dwell-mean",
+        default=9.0,
         type=float,
-        help="Specify the ideal event length.",
+        help="Specify the mean dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--dwell-std",
+        default=0.0,
+        type=float,
+        help="Specify the standard deviation of the dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
         show_default=True,
         hidden=True  # Hidden by default
     )(f)
@@ -396,7 +404,8 @@ def predict(
     show_advanced_options,
     noise_sampler,
     duration_sampler,
-    ideal_event_length,
+    dwell_mean,
+    dwell_std,
     noise_std,
     distr,
     predict_batch_size,
@@ -452,7 +461,8 @@ def predict(
         "profile": profile,
         "noise_sampler": noise_sampler,
         "duration_sampler": duration_sampler,
-        "ideal_event_length": ideal_event_length,
+        "dwell_mean": dwell_mean,
+        "dwell_std": dwell_std,
         "noise_std": noise_std,
         "distr": distr,
         "predict_batch_size": predict_batch_size,
@@ -491,7 +501,8 @@ def predict(
         c=coverage,
         out=out,
         profile=profile,
-        ideal_event_length=ideal_event_length,
+        dwell_mean=dwell_mean,
+        dwell_std=dwell_std,
         noise_std=noise_std,
         noise_sampling=noise_sampler,
         duration_sampling=duration_sampler,

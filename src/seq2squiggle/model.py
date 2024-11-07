@@ -33,7 +33,8 @@ class seq2squiggle(pl.LightningModule):
         config: dict,
         save_valid_plots: bool = True,
         out_writer: None = None,
-        ideal_event_length: int = 0,
+        dwell_mean: float = 9.0,
+        dwell_std: float = 0.0,
         noise_std: float = -1,
         noise_sampling: bool = False,
         duration_sampling: bool = False,
@@ -49,7 +50,8 @@ class seq2squiggle(pl.LightningModule):
         self.save_valid_plots = save_valid_plots
         self.results = []
         self.out_writer = out_writer
-        self.ideal_event_length = ideal_event_length
+        self.dwell_mean = dwell_mean
+        self.dwell_std = dwell_std
         self.noise_std = noise_std
         self.noise_sampling = noise_sampling
         self.duration_sampling = duration_sampling
@@ -210,7 +212,8 @@ class seq2squiggle(pl.LightningModule):
             target=None,
             noise_std_prediction=noise_std_prediction,
             max_length=self.config["max_signal_len"],
-            ideal_length=self.ideal_event_length,
+            dwell_mean=self.dwell_mean,
+            dwell_std=self.dwell_std,
             duration_sampling=self.duration_sampling,
         )
 

@@ -396,7 +396,8 @@ class LengthRegulator(nn.Module):
         alpha=1.0,
         target=None,
         max_length=None,
-        ideal_length=0.0,
+        dwell_mean=9.0,
+        dwell_std=0.0,
         duration_sampling=True,
     ):
         min_value = 3
@@ -411,13 +412,13 @@ class LengthRegulator(nn.Module):
         else:
             bs, seq, _ = emb_out.shape
             dist = None
-            if ideal_length > 0:
-                duration_predictor_output = torch.full((bs, seq), ideal_length).to(
+            if dwell_std > 0:
+                duration_predictor_output = torch.full((bs, seq), dwell_mean).to(
                     device
                 )
             else:
-                mean = torch.full((bs, seq), 9.0).to(device)
-                std = torch.full((bs, seq), 4.0).to(device)
+                mean = torch.full((bs, seq), dwell_mean).to(device)
+                std = torch.full((bs, seq), dwell_std).to(device)
                 duration_predictor_output = torch.normal(mean=mean, std=std)
                 # Ensure all values are positive by clipping to a minimum value
                 # a small positive value to ensure strictly positive values

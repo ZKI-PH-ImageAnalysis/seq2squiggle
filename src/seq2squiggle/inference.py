@@ -28,7 +28,7 @@ logger = logging.getLogger("seq2squiggle")
 
 
 def get_writer(
-    out: str, profile: object, ideal_event_length: int, export_every_n_samples: int
+    out: str, profile: object, ideal_mode: bool, export_every_n_samples: int
 ) -> tuple:
     """
     Returns an appropriate file writer object based on the output file extension.
@@ -58,7 +58,7 @@ def get_writer(
         os.remove(out)
 
     if any(out_base.endswith(ext) for ext in slow5_ext):
-        return BLOW5Writer(out, profile, ideal_event_length), export_every_n_samples
+        return BLOW5Writer(out, profile, ideal_mode), export_every_n_samples
     elif out_base.endswith(pod5_ext):
         logger.warning("POD5 Writer does not support appending to an existing file.")
         logger.warning(
@@ -67,7 +67,7 @@ def get_writer(
         logger.warning(
             "This might lead to Out of Memory errors for large-scale simulations. Consider exporting to BLOW5/SLOW5 and using the blue_crab tool for conversion to pod5."
         )
-        return POD5Writer(out, profile, ideal_event_length), float("inf")
+        return POD5Writer(out, profile, ideal_mode), float("inf")
     else:
         logger.error("Output file must have .pod5, .slow5, or .blow5 extension.")
         raise ValueError("Output file must have .pod5, .slow5, or .blow5 extension.")
@@ -220,7 +220,8 @@ def inference_run(
     c: int,
     out: str,
     profile: dict,
-    ideal_event_length: int,
+    dwell_mean: int,
+    dwell_std: float,
     noise_std: float,
     noise_sampling: bool,
     duration_sampling: bool,
@@ -292,8 +293,11 @@ def inference_run(
         median_before_mean=median_before_mean,
         median_before_std=median_before_std)
 
+    # True
+    ideal_mode = not(duration_sampling or dwell_std > 0)
+    
     writer, export_every_n_samples = get_writer(
-        out, profile_dict, ideal_event_length, export_every_n_samples
+        out, profile_dict, ideal_mode, export_every_n_samples
     )
 
     if saved_weights is None:
@@ -315,7 +319,8 @@ def inference_run(
     load_model = seq2squiggle.load_from_checkpoint(
         checkpoint_path=saved_weights,
         out_writer=writer,
-        ideal_event_length=ideal_event_length,
+        dwell_mean=dwell_mean,
+        dwell_std=dwell_std,
         noise_std=noise_std,
         noise_sampling=noise_sampling,
         duration_sampling=duration_sampling,
