@@ -379,9 +379,9 @@ def conditional_option(f):
 )
 @click.option(
     "--profile",
-    default="prom_r10_dna",
+    default="dna-r10-prom",
     show_default=True,
-    type=click.Choice(["minion_r10_dna", "prom_r10_dna", "prom_r9_dna", "minion_r9_dna"]),
+    type=click.Choice(["dna-r10-prom", "dna-r10-min", "dna-r9-prom", "dna-r9-min"]),
     help="Select a profile for data simulation. The profile determines values for digitization, sample rate, range, offset mean, offset standard deviation, median before mean, and median before standard deviation.",
 )
 @click.option(

@@ -12,8 +12,6 @@ from datetime import datetime
 import os
 from uuid import uuid4
 
-from .utils import get_profile
-
 logger = logging.getLogger("seq2squiggle")
 
 

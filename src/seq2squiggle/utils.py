@@ -145,7 +145,7 @@ def get_profile(profile):
     -------
     """
     profiles = {
-        "minion_r10_dna": {
+        "dna-r10-min": {
             "digitisation": 8192,
             "sample_rate": 5000,
             "range": 1536.598389,
@@ -154,7 +154,7 @@ def get_profile(profile):
             "median_before_mean": 202.15407438804,
             "median_before_std": 13.406139241768,
         },
-        "prom_r10_dna": {
+        "dna-r10-prom": {
             "digitisation": 2048,
             "sample_rate": 5000,
             "range": 281.345551,
@@ -163,7 +163,7 @@ def get_profile(profile):
             "median_before_mean": 189.87607393756,
             "median_before_std": 15.788097978713,
         },
-        "prom_r9_dna": {
+        "dna-r9-min": {
             "digitisation": 2048,
             "sample_rate": 4000,
             "range": 748.5801,
@@ -172,7 +172,7 @@ def get_profile(profile):
             "median_before_mean": 214.2890337,
             "median_before_std": 18.0127916,
         },
-        "minion_r9_dna": {
+        "dna-r10-prom": {
             "digitisation": 8192,
             "sample_rate": 4000,
             "range": 1443.030273,
