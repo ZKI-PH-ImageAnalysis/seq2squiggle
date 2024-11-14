@@ -19,6 +19,7 @@ import platform
 import psutil
 import multiprocessing
 from typing import List, Generator, Tuple, Union
+from uuid import uuid4
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -418,12 +419,12 @@ def export_fasta(read_l, fasta):
     out_file = f"{file_name}_reads.fasta"
     with open(out_file, "w") as f:
         for i, read in enumerate(read_l):
-            f.write(f">Read_{i}\n{''.join(read)}\n")
+            f.write(f"{str(uuid4())}\n{''.join(read)}\n")
     return out_file
 
 
 def yield_reads(reads):
-    return ((read, f">Read_{i}") for i, read in enumerate(reads))
+    return ((read, str(uuid4())) for i, read in enumerate(reads))
 
 
 def sample_reads_from_genome(

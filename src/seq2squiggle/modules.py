@@ -412,7 +412,7 @@ class LengthRegulator(nn.Module):
         else:
             bs, seq, _ = emb_out.shape
             dist = None
-            if dwell_std > 0:
+            if dwell_std <= 0:
                 duration_predictor_output = torch.full((bs, seq), dwell_mean).to(
                     device
                 )
