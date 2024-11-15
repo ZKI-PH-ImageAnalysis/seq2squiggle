@@ -13,7 +13,7 @@ from torch.distributed import init_process_group, get_rank, get_world_size
 from multiprocessing.pool import ThreadPool as Pool
 import itertools
 import multiprocessing
-import torch.distributed as dist
+import torch.distributed as tdi
 
 from typing import Tuple, List, Optional, Dict, Generator
 from bisect import bisect
@@ -292,20 +292,26 @@ class DataParallelIterableDataSet(IterableDataset):
         self.world_size = world_size
 
     def __iter__(self):
+        # devices split
+        device_rank, num_devices = (tdi.get_rank(), tdi.get_world_size()) if tdi.is_initialized() else (0, 1)  
+        # workers split
         worker_info = get_worker_info()
-        if worker_info is not None:
-            num_workers = worker_info.num_workers
-            worker_id = get_worker_info().id
-            world_size = self.world_size
-            rank = self.rank
-        
-        if worker_info is not None:
-            if rank == 0:
-                self.iterable = itertools.islice(self.iterable, worker_id, None, (num_workers * world_size))
-            else:
-                self.iterable = itertools.islice(self.iterable, worker_id + (num_workers * rank), None, (num_workers * world_size))
+        worker_rank, num_workers = (worker_info.id, worker_info.num_workers) if worker_info else (0, 1)
 
-        return self.iterable
+        # total (devices + workers) split by device, then by worker
+        num_replicas = num_workers * num_devices
+        replica_rank = worker_rank * num_devices + device_rank
+        # by worker, then device would be:
+        # rank = device_rank * num_workers + worker_rank
+
+        for i, data in enumerate(self.iterable):
+            if i % num_replicas == replica_rank:
+                #print(f"Device: {device_rank}, worker {worker_rank} fetches sample {i}")
+                yield data
+            else:
+                continue
+
+        # return self.iterable
 
 
     def __len__(self):
@@ -440,7 +446,7 @@ def load_fasta(
     logger.debug("Splitting the reads to chunks finished.")
     
     predict_loader_kwargs = {
-        # "dataset": DataParallelIterableDataSet(combined_generator, total_l, rank, world_size),
+        #"dataset": DataParallelIterableDataSet(combined_generator, total_l, rank, world_size),
         "dataset": IterableFastaDataSet(combined_generator, total_l),
         "shuffle": False,
     }

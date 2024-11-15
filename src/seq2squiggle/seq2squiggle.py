@@ -561,7 +561,6 @@ def version():
 
 def set_config(config_path : dict) -> dict:
     default_config_path = pathlib.Path(__file__).parent / "config.yaml"
-
     path_to_use = default_config_path if config_path is None else config_path
 
     try:

@@ -18,7 +18,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from .signal_io import BLOW5Writer, POD5Writer
 from .model import seq2squiggle
-from .utils import get_reads, get_profile, update_profile
+from .utils import get_reads, get_profile, update_profile, update_config
 from .train import DDPStrategy
 from .dataloader import PoreDataModule
 from . import __version__
@@ -293,7 +293,9 @@ def inference_run(
         median_before_mean=median_before_mean,
         median_before_std=median_before_std)
 
-    # True
+    # Update config based on profile_dict
+    config = update_config(profile, config)
+
     ideal_mode = not(duration_sampling or dwell_std > 0)
     
     writer, export_every_n_samples = get_writer(
@@ -341,6 +343,7 @@ def inference_run(
         devices="auto",
         logger=False,
         strategy=_get_strategy(),
+        # use_distributed_sampler=False
     )
 
     rank = trainer.global_rank

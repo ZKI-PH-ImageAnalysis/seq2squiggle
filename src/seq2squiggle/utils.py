@@ -216,6 +216,26 @@ def update_profile(profile_dict, **kwargs):
     
     return profile_dict
 
+def update_config(profile_name, config):
+    """
+    Updates the configuration dictionary with the appropriate sequence k-mer size
+    based on the profile name.
+
+    Parameters:
+        profile_name (str): The profile name, typically indicating sequencing chemistry.
+        config (dict): The configuration dictionary to update.
+
+    Returns:
+        dict: The updated configuration dictionary.
+    """
+    if profile_name.startswith("dna-r10"):
+        config["seq_kmer"] = 9
+    elif profile_name.startswith("dna-r9"):
+        config["seq_kmer"] = 6
+    else:
+        raise ValueError(f"Unsupported profile name: {profile_name}. Expected 'dna-r10' or 'dna-r9' prefix.")
+    return config
+
 
 def regular_break_points(n, chunk_len, overlap=0, align="left"):
     """
