@@ -50,6 +50,10 @@ Generate 10,000 reads from a fasta file:
 ```
 seq2squiggle predict example.fasta -o example.blow5 -n 10000
 ```
+Generate 10,000 reads using R9.4.1 chemistry on a MinION:
+```
+seq2squiggle predict example.fasta -o example.blow5 -n 10000 --profile dna_r9_min
+```
 Generate reads with a coverage of 30:
 ```
 seq2squiggle predict example.fasta -o example.blow5 -c 30
