@@ -67,41 +67,38 @@ Export as pod5:
 seq2squiggle predict example.fastq -o example.pod5 --read-input
 ```
 
+## Noise options
+`seq2squiggle` provides flexible options for generating signal data with various noise configurations. By default, it uses its duration sampler and noise sampler modules to predict event durations and amplitude noise levels specific to each input k-mer. Alternatively, you can deactivate these modules (`--noise-sampler False --duration-sampler False`) and use static distributions to sample event durations and amplitude noise. The static distributions can be configured using the options `--noise-std`, `--dwell-std`, and `--dwell-mean`.
 
+### Examples using different noise options
 
-## Different noise options
-`seq2squiggle` supports different options for generating the signal data.
-Per default, the noise sampler and duration sampler are used.
-
-### Examples
-
-Generate reads using both the noise sampler and duration sampler: 
+Default configuration (noise sampler and duration sampler enabled): 
 ```
 seq2squiggle predict example.fasta -o example.blow5
 ```
-Generate reads using the noise sampler with an increased factor and duration sampler:
+Using the noise sampler with increased noise standard deviation and the duration sampler:
 ```
 seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.5
 ```
-Generate reads using a static normal distribution for the noise and duration sampler:
+Using a static normal distribution for the amplitude noise and the duration sampler:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.5 --noise-sampling False
+seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.0 --noise-sampling False
 ```
-Generate reads using only the noise sampler and a static normal distribution for the event length:
+Using the noise sampler and a static normal distribution for event durations:
 ```
 seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length -1
 ```
-Generate reads using only the noise sampler and ideal event lengths:
+Using the noise sampler with ideal event lengths:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0
 ```
-Generate reads using a static normal distribution for the amplitude noise and ideal event lengths:
+Using a static normal distribution for amplitude noise and ideal event lengths:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0 --noise-sampling False --noise-std 1.0
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0 --noise-sampling False --noise-std 1.0
 ```
-Generate reads using no amplitude noise and ideal event lengths:
+Generating reads with no amplitude noise and ideal event lengths:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0 --noise-sampling False --noise-std -1
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0 --noise-sampling False --noise-std 0.0
 ```
 
 ## Train a new model
