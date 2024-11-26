@@ -241,15 +241,20 @@ def check_model(model: object, config: dict) -> None:
         "save_model",
     ]
 
-    # TODO Raise error of seqkmer is not equal 
-
     # Check for mismatches in parameters that are not in the exclusion list
     for param, value in architecture_params.items():
         if param not in exclude_params:
             if model_params.get(param) != value:
+                if param == "seq_kmer":
+                    raise ValueError(
+                        f"Parameter 'seq_kmer' mismatch: Model checkpoint value is "
+                        f"{model_params.get(param)}, while config value is {value}. "
+                        f"The model was trained on {model_params.get(param)}-mers, while the config file expects {value}-mers. "
+                        "Choose a different model or change the config value or the --profile option. "
+                    )
                 logger.warning(
-                    f"Mismatching {param} parameter in model checkpoint"
-                    f" ({model_params.get(param)}) and in config file ({value})"
+                    f"Mismatching {param} parameter in model checkpoint "
+                    f"({model_params.get(param)}) and in config file ({value})"
                 )
 
 
