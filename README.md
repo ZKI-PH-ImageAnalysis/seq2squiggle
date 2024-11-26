@@ -2,11 +2,11 @@
 
 `seq2squiggle` is a deep learning-based tool for generating artifical nanopore signals from DNA sequence data.
 
-<img src="/img/seq2squiggle_architecture.png" width="750">
+<img src="/img/seq2squiggle.png" width="750">
 
 
 Please cite the following publication if you use `seq2squiggle` in your work:
-- Beslic,  D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Körber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
+- Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renard, B. Y., & Körber, N. (2024). End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv. doi:10.1101/2024.08.12.607296 
 
 ## Installation 
 
@@ -50,6 +50,10 @@ Generate 10,000 reads from a fasta file:
 ```
 seq2squiggle predict example.fasta -o example.blow5 -n 10000
 ```
+Generate 10,000 reads using R9.4.1 chemistry on a MinION:
+```
+seq2squiggle predict example.fasta -o example.blow5 -n 10000 --profile dna_r9_min
+```
 Generate reads with a coverage of 30:
 ```
 seq2squiggle predict example.fasta -o example.blow5 -c 30
@@ -67,41 +71,38 @@ Export as pod5:
 seq2squiggle predict example.fastq -o example.pod5 --read-input
 ```
 
+## Noise options
+`seq2squiggle` provides flexible options for generating signal data with various noise configurations. By default, it uses its duration sampler and noise sampler modules to predict event durations and amplitude noise levels specific to each input k-mer. Alternatively, you can deactivate these modules (`--noise-sampler False --duration-sampler False`) and use static distributions to sample event durations and amplitude noise. The static distributions can be configured using the options `--noise-std`, `--dwell-std`, and `--dwell-mean`.
 
+### Examples using different noise options
 
-## Different noise options
-`seq2squiggle` supports different options for generating the signal data.
-Per default, the noise sampler and duration sampler are used.
-
-### Examples
-
-Generate reads using both the noise sampler and duration sampler: 
+Default configuration (noise sampler and duration sampler enabled): 
 ```
 seq2squiggle predict example.fasta -o example.blow5
 ```
-Generate reads using the noise sampler with an increased factor and duration sampler:
+Using the noise sampler with increased noise standard deviation and the duration sampler:
 ```
 seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.5
 ```
-Generate reads using a static normal distribution for the noise and duration sampler:
+Using a static normal distribution for the amplitude noise and the duration sampler:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.5 --noise-sampling False
+seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.0 --noise-sampling False
 ```
-Generate reads using only the noise sampler and a static normal distribution for the event length:
+Using the noise sampler and a static normal distribution for event durations:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length -1
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-std 4.0
 ```
-Generate reads using only the noise sampler and ideal event lengths:
+Using the noise sampler with ideal event lengths (each k-mer event will have a length of 10):
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0
 ```
-Generate reads using a static normal distribution for the amplitude noise and ideal event lengths:
+Using a static normal distribution for amplitude noise and ideal event lengths:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0 --noise-sampling False --noise-std 1.0
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0 --noise-sampling False --noise-std 1.0
 ```
-Generate reads using no amplitude noise and ideal event lengths:
+Generating reads with no amplitude noise and ideal event lengths:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length 10.0 --noise-sampling False --noise-std -1
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0 --noise-sampling False --noise-std 0.0
 ```
 
 ## Train a new model
@@ -125,4 +126,5 @@ seq2squiggle train train_dir valid_dir --config my_config.yml --model last.ckpt
 ```
 
 ## Acknowledgement
-The model is based on [xcmyz's implementation of FastSpeech](https://github.com/xcmyz/FastSpeech). Some code snippets for preprocessing DNA-signal chunks have been taken from [bonito](https://github.com/nanoporetech/bonito). 
+The model is based on [xcmyz's implementation of FastSpeech](https://github.com/xcmyz/FastSpeech). Some code snippets for preprocessing DNA-signal chunks have been taken from [bonito](https://github.com/nanoporetech/bonito). We also incorporated code snippets from [Casanovo](https://github.com/Noble-Lab/casanovo) for different functionalities, including downloading weights, logging, and the design of the main function. 
+Additionally, we used parameter profiles from squigulator for various chemistries to set digitisation, sample-rate, range, median_before, and other signal parameters. These profiles are detailed in [squigulator's documentation](https://hasindu2008.github.io/squigulator/docs/profile.html).

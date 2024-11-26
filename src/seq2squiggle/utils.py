@@ -19,6 +19,7 @@ import platform
 import psutil
 import multiprocessing
 from typing import List, Generator, Tuple, Union
+from uuid import uuid4
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -50,7 +51,7 @@ def n_workers() -> int:
     return n_cpu // n_gpu if (n_gpu := torch.cuda.device_count()) > 1 else n_cpu
 
 
-def one_hot_encode(sequences: List[str]) -> np.ndarray:
+def one_hot_encode(sequences: List[str], seq_len: int) -> np.ndarray:
     """
     One-hot encodes a list of DNA sequences.
 
@@ -58,6 +59,8 @@ def one_hot_encode(sequences: List[str]) -> np.ndarray:
     ----------
     sequences : list of str
         A list where each string is a DNA sequence containing characters from {"_", "A", "C", "G", "T"}.
+    seq_len: int
+        Length of the input k-mer sequences
 
     Returns
     -------
@@ -73,7 +76,7 @@ def one_hot_encode(sequences: List[str]) -> np.ndarray:
 
     # Initialize an empty array to store the one-hot encoded sequences
     n_outer_sequences = len(sequences)
-    one_hot_encoded = np.zeros((n_outer_sequences, 9, n_letters), dtype=np.float16)
+    one_hot_encoded = np.zeros((n_outer_sequences, seq_len, n_letters), dtype=np.float16)
 
     # Iterate through each outer sequence and its inner sequences, and one-hot encode them
     for i, outer_sequence in enumerate(sequences):
@@ -142,23 +145,41 @@ def get_profile(profile):
     -------
     """
     profiles = {
-        "minion_r10_dna": {
+        "dna-r10-min": {
             "digitisation": 8192,
-            "sample_rate": 4000,
+            "sample_rate": 5000,
             "range": 1536.598389,
             "offset_mean": 13.380569389019,
             "offset_std": 16.311471649012,
             "median_before_mean": 202.15407438804,
             "median_before_std": 13.406139241768,
         },
-        "prom_r10_dna": {
+        "dna-r10-prom": {
             "digitisation": 2048,
-            "sample_rate": 4000,
+            "sample_rate": 5000,
             "range": 281.345551,
             "offset_mean": -127.5655735,
             "offset_std": 19.377283387665,
             "median_before_mean": 189.87607393756,
             "median_before_std": 15.788097978713,
+        },
+        "dna-r9-min": {
+            "digitisation": 8192,
+            "sample_rate": 4000,
+            "range": 1443.030273,
+            "offset_mean": 13.7222605,
+            "offset_std": 10.25279688,
+            "median_before_mean": 200.815801,
+            "median_before_std": 20.48933762,
+        },
+        "dna-r9-prom": {
+            "digitisation": 2048,
+            "sample_rate": 4000,
+            "range": 748.5801,
+            "offset_mean": -237.4102,
+            "offset_std": 14.1575,
+            "median_before_mean": 214.2890337,
+            "median_before_std": 18.0127916,
         },
     }
 
@@ -166,6 +187,54 @@ def get_profile(profile):
         return profiles[profile]
     else:
         logger.error(f"Incorrect value for profile: {profile}")
+
+
+def update_profile(profile_dict, **kwargs):
+    """
+    Update the profile dictionary with the provided parameters.
+
+    Any parameter in kwargs that is not None will replace the corresponding 
+    value in the profile_dict.
+
+    -------
+    Arguments
+    dict
+        The current profile dictionary to update
+    kwargs
+        The parameters to update in the profile dictionary
+
+    -------
+    Returns
+    dict
+        The updated profile dictionary
+    """
+    for key, value in kwargs.items():
+        if value is not None and key in profile_dict:
+            profile_dict[key] = value
+        elif key not in profile_dict:
+            logger.warning(f"Warning: {key} is not a valid key in the profile")
+    
+    return profile_dict
+
+def update_config(profile_name, config):
+    """
+    Updates the configuration dictionary with the appropriate sequence k-mer size
+    based on the profile name.
+
+    Parameters:
+        profile_name (str): The profile name, typically indicating sequencing chemistry.
+        config (dict): The configuration dictionary to update.
+
+    Returns:
+        dict: The updated configuration dictionary.
+    """
+    if profile_name.startswith("dna-r10"):
+        config["seq_kmer"] = 9
+    elif profile_name.startswith("dna-r9"):
+        config["seq_kmer"] = 6
+    else:
+        raise ValueError(f"Unsupported profile name: {profile_name}. Expected 'dna-r10' or 'dna-r9' prefix.")
+    return config
 
 
 def regular_break_points(n, chunk_len, overlap=0, align="left"):
@@ -255,7 +324,7 @@ def add_remainder(x, max_dna, k):
 def split_sequence(x, config):
     x = extract_kmers(x, config["seq_kmer"])
     x = add_remainder(x, config["max_dna_len"], config["seq_kmer"])
-    x = one_hot_encode(x)
+    x = one_hot_encode(x, config["seq_kmer"])
     breakpoints = regular_break_points(len(x), config["max_dna_len"], align="left")
     x_breaks = np.array([x[i:j] for (i, j) in breakpoints])
     return x_breaks
@@ -370,12 +439,12 @@ def export_fasta(read_l, fasta):
     out_file = f"{file_name}_reads.fasta"
     with open(out_file, "w") as f:
         for i, read in enumerate(read_l):
-            f.write(f">Read_{i}\n{''.join(read)}\n")
+            f.write(f"{str(uuid4())}\n{''.join(read)}\n")
     return out_file
 
 
 def yield_reads(reads):
-    return ((read, f">Read_{i}") for i, read in enumerate(reads))
+    return ((read, str(uuid4())) for i, read in enumerate(reads))
 
 
 def sample_reads_from_genome(

@@ -12,8 +12,6 @@ from datetime import datetime
 import os
 from uuid import uuid4
 
-from .utils import get_profile
-
 logger = logging.getLogger("seq2squiggle")
 
 
@@ -27,19 +25,18 @@ class BLOW5Writer:
         The name of the slow5 file.
     """
 
-    def __init__(self, filename, profile, ideal_event_length):
+    def __init__(self, filename, profile, ideal_mode):
         self.filename = filename
         self.profile: dict = profile
-        self.ideal_event_length = ideal_event_length
+        self.ideal_mode = ideal_mode
         self.signals = None
-        self.profile_d = get_profile(self.profile)
-        self.median_before = float(self.profile_d["median_before_mean"])
-        self.median_before_std = float(self.profile_d["median_before_std"])
-        self.offset = float(self.profile_d["offset_mean"])
-        self.offset_std = float(self.profile_d["offset_std"])
-        self.digitisation = float(self.profile_d["digitisation"])
-        self.signal_range = float(self.profile_d["range"])
-        self.sample_rate = float(self.profile_d["sample_rate"])
+        self.median_before = float(self.profile["median_before_mean"])
+        self.median_before_std = float(self.profile["median_before_std"])
+        self.offset = float(self.profile["offset_mean"])
+        self.offset_std = float(self.profile["offset_std"])
+        self.digitisation = float(self.profile["digitisation"])
+        self.signal_range = float(self.profile["range"])
+        self.sample_rate = float(self.profile["sample_rate"])
         self.start_time = 0
 
     def save(self):
@@ -57,11 +54,24 @@ class BLOW5Writer:
         # To write a file, mode in Open() must be set to 'w' and when appending, 'a'
         s5 = pyslow5.Open(str(self.filename), f_mode)
 
+        if f_mode == 'w':
+            header, end_reason_labels  = s5.get_empty_header(aux=True)
+            header['asic_id'] = 'asic_id_0'
+            header['exp_start_time'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            header['experiment_type'] = 'genomic_dna'
+            header['run_id'] = 'run_id_0'
+            header['sample_frequency'] = int(self.sample_rate)
+
+            # Remove any fields with None values from header
+            header = {key: value for key, value in header.items() if value is not None}
+
+            ret = s5.write_header(header,end_reason_labels=end_reason_labels)
+
         records = {}
         auxs = {}
 
         for idx, (read_id, signal) in enumerate(self.signals.items()):
-            if self.ideal_event_length <= 0:
+            if self.ideal_mode:
                 median_before_value = np.random.normal(
                     self.median_before, self.median_before_std
                 )
@@ -69,7 +79,7 @@ class BLOW5Writer:
             else:
                 median_before_value = self.median_before
                 offset_value = self.offset
-            signal = signal.numpy().astype(np.float32)
+            signal = signal.cpu().numpy().astype(np.float32)
             signal_raw = np.round(
                 signal * self.digitisation / self.signal_range - self.offset
             )
@@ -111,19 +121,18 @@ class POD5Writer:
         The name of the pod5 file.
     """
 
-    def __init__(self, filename, profile, ideal_event_length):
+    def __init__(self, filename, profile, ideal_mode):
         self.filename = filename
         self.profile: dict = profile
-        self.ideal_event_length = ideal_event_length
+        self.ideal_mode = ideal_mode
         self.signals = None
-        self.profile_d = get_profile(self.profile)
-        self.median_before = float(self.profile_d["median_before_mean"])
-        self.median_before_std = float(self.profile_d["median_before_std"])
-        self.offset = float(self.profile_d["offset_mean"])
-        self.offset_std = float(self.profile_d["offset_std"])
-        self.digitisation = float(self.profile_d["digitisation"])
-        self.signal_range = float(self.profile_d["range"])
-        self.sample_rate = float(self.profile_d["sample_rate"])
+        self.median_before = float(self.profile["median_before_mean"])
+        self.median_before_std = float(self.profile["median_before_std"])
+        self.offset = float(self.profile["offset_mean"])
+        self.offset_std = float(self.profile["offset_std"])
+        self.digitisation = float(self.profile["digitisation"])
+        self.signal_range = float(self.profile["range"])
+        self.sample_rate = float(self.profile["sample_rate"])
         self.start_time = 0
 
     def save(self):
@@ -133,6 +142,8 @@ class POD5Writer:
         if self.signals == None:
             logger.warning("POD5 was not exported. No signals were found")
             raise ValueError("POD5 was not exported. No signals were found")
+
+        
 
         run_info = pod5.RunInfo(
             acquisition_id="",  # f5d5051ec9f7983c76e78543f720289d2988ce48
@@ -157,10 +168,12 @@ class POD5Writer:
             tracking_id={},
         )
 
+
+
         pod5_reads = []
 
         for idx, (read_id, signal) in enumerate(self.signals.items()):
-            if self.ideal_event_length <= 0:
+            if self.ideal_mode:
                 median_before_value = np.random.normal(
                     self.median_before, self.median_before_std
                 )
@@ -168,13 +181,13 @@ class POD5Writer:
             else:
                 median_before_value = self.median_before
                 offset_value = self.offset
-            signal = signal.numpy().astype(np.float32)
+            signal = signal.cpu().numpy().astype(np.float32)
             signal_raw = np.round(
                 signal * self.digitisation / self.signal_range - self.offset
             )
             signal_raw = signal_raw.astype(np.int16)
 
-            pore = pod5.Pore(channel=123, well=3, pore_type="pore_type")
+            pore = pod5.Pore(channel=123, well=3, pore_type="not_set")
             calibration = pod5.Calibration(
                 offset=offset_value, scale=(self.signal_range / self.digitisation)
             )
