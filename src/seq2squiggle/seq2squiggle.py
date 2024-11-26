@@ -135,9 +135,9 @@ def preprocess(
     verbosity,
 ):
     """
-    Preprocess f5c's events.tsv for training the model
+    Preprocess uncalled4's events.tsv for training the model
 
-    EVENTS_PATH must be a events.tsv from f5c.
+    EVENTS_PATH must be a events.tsv from uncalled4 or f5c.
     OUTDIR must be path to output directory
     """
     setup_logging(verbosity)
@@ -205,12 +205,140 @@ def train(
     logger.info("Training done.")
 
 
-@main.command(cls=_SharedParams)
+# Function to conditionally show advanced options
+def conditional_option(f):
+    f = click.option(
+        "--noise-sampler",
+        default=True,
+        type=bool,
+        help="Enable or disable the noise sampler.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--duration-sampler",
+        default=True,
+        type=bool,
+        help="Enable or disable the duration sampler.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--dwell-mean",
+        default=9.0,
+        type=float,
+        help="Specify the mean dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--dwell-std",
+        default=0.0,
+        type=float,
+        help="Specify the standard deviation of the dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--noise-std",
+        default=1.0,
+        type=float,
+        help="Set the standard deviation for noise.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--distr",
+        default="expon",
+        type=click.Choice(["expon", "beta", "gamma"]),
+        help="Choose a distribution for read sampling.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--predict-batch-size",
+        default=1024,
+        type=int,
+        help="Specify the batch size for prediction.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--export-every-n-samples",
+        default=1000000,
+        type=int,
+        help="Specify how often the predicted samples should be saved.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--sample-rate",
+        default=5000,
+        type=int,
+        help="Specify the sampling rate.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--digitisation",
+        default=None,
+        type=int,
+        help="Specify the digitisation.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--range_val",
+        default=None,
+        type=float,
+        help="Specify the range value.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--offset_mean",
+        default=None,
+        type=float,
+        help="Specify the digitisation.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--offset_std",
+        default=None,
+        type=float,
+        help="Specify the digitisation.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--median_before_mean",
+        default=None,
+        type=float,
+        help="Specify the digitisation.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--median_before_std",
+        default=None,
+        type=float,
+        help="Specify the digitisation.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    return f
+
+
+
+
+
+@main.command(cls=_SharedParams, context_settings={"ignore_unknown_options": True})
 @click.argument(
     "fasta",
-    required=True,
+    required=False,
     type=click.Path(
-        exists=True, file_okay=True, dir_okay=False, path_type=pathlib.Path
+        exists=False, file_okay=True, dir_okay=False, path_type=pathlib.Path
     ),
 )
 @click.option(
@@ -245,67 +373,27 @@ def train(
 @click.option(
     "-o",
     "--out",
-    required=True,
+    required=False,
     type=click.Path(file_okay=True, dir_okay=False, path_type=pathlib.Path),
     help="Specify the path to the output POD5/SLOW5/BLOW5 file.",
 )
 @click.option(
     "--profile",
-    default="prom_r10_dna",
+    default="dna-r10-prom",
     show_default=True,
-    type=click.Choice(["minion_r10_dna", "prom_r10_dna"]),
+    type=click.Choice(["dna-r10-prom", "dna-r10-min", "dna-r9-prom", "dna-r9-min"]),
     help="Select a profile for data simulation. The profile determines values for digitization, sample rate, range, offset mean, offset standard deviation, median before mean, and median before standard deviation.",
 )
 @click.option(
-    "--noise-sampler",
-    show_default=True,
-    default=True,
-    type=bool,
-    help="Enable or disable the noise sampler. If disabled, no noise will be added to the signal.",
+    "--show-advanced-options", 
+    is_flag=True, 
+    default=False, 
+    help="Show advanced options for signal prediction."
 )
-@click.option(
-    "--duration-sampler",
-    show_default=True,
-    default=True,
-    type=bool,
-    help="Enable or disable the duration sampler. If disabled, the ideal event length will be used.",
-)
-@click.option(
-    "--ideal-event-length",
-    default=-1.0,
-    show_default=True,
-    type=float,
-    help="Specify the ideal event length to use. This option is only effective if the duration sampler is disabled. If set to -1, a static normal distribution will be used.",
-)
-@click.option(
-    "--noise-std",
-    default=1.0,
-    show_default=True,
-    type=float,
-    help="Set the standard deviation for noise. When the noise sampler is enabled, the noise generated will be scaled by this value. If the noise sampler is disabled, a static normal distribution will be used. No additional noise will be added if noise-std is less than or equal to 0.",
-)
-@click.option(
-    "--distr",
-    default="expon",
-    show_default=True,
-    type=click.Choice(["expon", "beta", "gamma"]),
-    help="Choose a distribution for read sampling. This option is only required in genome mode.",
-)
-@click.option(
-    "--predict-batch-size",
-    default=1024,
-    show_default=True,
-    type=int,
-    help="Specify the batch size for prediction.",
-)
-@click.option(
-    "--export-every-n-samples",
-    default=500000,
-    show_default=True,
-    type=int,
-    help="Specify how often the predicted samples (chunk) should be saved to output file. Increasing it will reduce runtime and increase memory consumption.",
-)
+@conditional_option
+@click.pass_context
 def predict(
+    ctx,
     fasta,
     read_input,
     num_reads,
@@ -313,13 +401,22 @@ def predict(
     coverage,
     out,
     profile,
+    show_advanced_options,
     noise_sampler,
     duration_sampler,
-    ideal_event_length,
+    dwell_mean,
+    dwell_std,
     noise_std,
     distr,
     predict_batch_size,
     export_every_n_samples,
+    sample_rate,
+    digitisation,
+    range_val,
+    offset_mean,
+    offset_std,
+    median_before_mean,
+    median_before_std,
     seed,
     model,
     config,
@@ -330,6 +427,26 @@ def predict(
 
     FASTA must be .fasta file with desired genome or reads for simulation
     """
+    if show_advanced_options:
+        # Dynamically re-generate the command's help message with hidden=False
+        for param in ctx.command.params:
+            param.hidden = False
+
+        # Re-run help message to show advanced options
+        click.echo(ctx.get_help())
+        ctx.exit()  # Exit after showing help with advanced options
+    
+    # Check for help flag
+    if ctx.invoked_subcommand is None and ctx.args and "-h" in ctx.args:
+        # Print the normal help and exit
+        click.echo(ctx.get_help())
+        ctx.exit()
+
+    if not fasta or not out:
+        logger.error("FASTA file and Output file are required for prediction.")
+        ctx.exit(1)
+
+
     setup_logging(verbosity)
     logger.info("seq2squiggle version %s", str(__version__))
 
@@ -344,11 +461,19 @@ def predict(
         "profile": profile,
         "noise_sampler": noise_sampler,
         "duration_sampler": duration_sampler,
-        "ideal_event_length": ideal_event_length,
+        "dwell_mean": dwell_mean,
+        "dwell_std": dwell_std,
         "noise_std": noise_std,
         "distr": distr,
         "predict_batch_size": predict_batch_size,
         "export_every_n_samples": export_every_n_samples,
+        "sample_rate": sample_rate,
+        "digitisation": digitisation,
+        "range": range_val,
+        "offset_mean": offset_mean,
+        "offset_std": offset_std,
+        "median_before_mean": median_before_mean,
+        "median_before_std": median_before_std,
         "seed": seed,
         "model": model,
         "config": config,
@@ -376,13 +501,21 @@ def predict(
         c=coverage,
         out=out,
         profile=profile,
-        ideal_event_length=ideal_event_length,
+        dwell_mean=dwell_mean,
+        dwell_std=dwell_std,
         noise_std=noise_std,
         noise_sampling=noise_sampler,
         duration_sampling=duration_sampler,
         distr=distr,
         predict_batch_size=predict_batch_size,
         export_every_n_samples=export_every_n_samples,
+        sample_rate=sample_rate,
+        digitisation=digitisation,
+        range_val=range_val,
+        offset_mean=offset_mean,
+        offset_std=offset_std,
+        median_before_mean=median_before_mean,
+        median_before_std=median_before_std,
         seed=seed,
     )
     logger.info("Prediction done.")
@@ -428,7 +561,6 @@ def version():
 
 def set_config(config_path : dict) -> dict:
     default_config_path = pathlib.Path(__file__).parent / "config.yaml"
-
     path_to_use = default_config_path if config_path is None else config_path
 
     try:

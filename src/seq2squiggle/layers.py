@@ -5,7 +5,7 @@ Different Layers used in modules
 """
 
 from torch import nn, bmm, FloatTensor
-import numpy as np
+import torch
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -21,11 +21,10 @@ class ScaledDotProductAttention(nn.Module):
         attn = attn / self.temperature
 
         if mask is not None:
-            attn = attn.masked_fill(mask, -np.inf)
+            attn = attn.masked_fill(mask, -torch.inf)
 
         attn = self.softmax(attn)
         output = bmm(attn, v)
-
         return output, attn
 
 
@@ -43,7 +42,7 @@ class MultiHeadAttention(nn.Module):
         self.w_ks = nn.Linear(d_model, n_head * d_k)
         self.w_vs = nn.Linear(d_model, n_head * d_v)
 
-        self.attention = ScaledDotProductAttention(temperature=np.power(d_k, 0.5))
+        self.attention = ScaledDotProductAttention(temperature=d_k**0.5)
         self.layer_norm = nn.LayerNorm(d_model)
 
         self.fc = nn.Linear(n_head * d_v, d_model)
@@ -134,20 +133,22 @@ def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
     """Sinusoid position encoding table"""
 
     def cal_angle(position, hid_idx):
-        return position / np.power(10000, 2 * (hid_idx // 2) / d_hid)
+        return position / 10000**(2 * (hid_idx // 2) / d_hid)
 
     def get_posi_angle_vec(position):
         return [cal_angle(position, hid_j) for hid_j in range(d_hid)]
-
-    sinusoid_table = np.array(
+    
+    sinusoid_table = torch.tensor(
         [get_posi_angle_vec(pos_i) for pos_i in range(n_position)]
     )
 
-    sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
-    sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
+    sinusoid_table[:, 0::2] = torch.sin(sinusoid_table[:, 0::2])  # dim 2i
+    sinusoid_table[:, 1::2] = torch.cos(sinusoid_table[:, 1::2])  # dim 2i+1
 
     if padding_idx is not None:
         # zero vector for padding dimension
         sinusoid_table[padding_idx] = 0.0
 
-    return FloatTensor(sinusoid_table)
+    return torch.FloatTensor(sinusoid_table)
+
+    

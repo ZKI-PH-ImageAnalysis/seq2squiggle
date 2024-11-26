@@ -15,6 +15,7 @@ import numpy as np
 
 from .modules import Encoder, LengthRegulator, Decoder, NoiseSampler
 from .utils import generate_validation_plots
+from .signal_io import BLOW5Writer
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -32,7 +33,8 @@ class seq2squiggle(pl.LightningModule):
         config: dict,
         save_valid_plots: bool = True,
         out_writer: None = None,
-        ideal_event_length: int = 0,
+        dwell_mean: float = 9.0,
+        dwell_std: float = 0.0,
         noise_std: float = -1,
         noise_sampling: bool = False,
         duration_sampling: bool = False,
@@ -48,7 +50,8 @@ class seq2squiggle(pl.LightningModule):
         self.save_valid_plots = save_valid_plots
         self.results = []
         self.out_writer = out_writer
-        self.ideal_event_length = ideal_event_length
+        self.dwell_mean = dwell_mean
+        self.dwell_std = dwell_std
         self.noise_std = noise_std
         self.noise_sampling = noise_sampling
         self.duration_sampling = duration_sampling
@@ -195,7 +198,6 @@ class seq2squiggle(pl.LightningModule):
 
     def predict_step(self, batch):
         read_id, data, *args = batch
-
         bs, seq_l = data.shape[:2]
         data = data.reshape(bs, seq_l, -1)
 
@@ -210,50 +212,42 @@ class seq2squiggle(pl.LightningModule):
             target=None,
             noise_std_prediction=noise_std_prediction,
             max_length=self.config["max_signal_len"],
-            ideal_length=self.ideal_event_length,
+            dwell_mean=self.dwell_mean,
+            dwell_std=self.dwell_std,
             duration_sampling=self.duration_sampling,
         )
 
+
         prediction = self.decoders(length_predict_out)
 
-        prediction = prediction.cpu().squeeze(-1)
-
         prediction = prediction * self.config["scaling_max_value"]
-
-        non_zero_mask = prediction != 0
-
+        prediction = prediction.squeeze(-1)
+        
         if self.noise_std > 0:
+            non_zero_mask = prediction != 0
             if self.noise_sampling:
-                noise_std = noise_std_prediction_ext.detach().cpu().squeeze().numpy()
-                noise_std = (
-                    noise_std * self.noise_std * self.config["scaling_max_value"]
-                )
-                gen_noise = np.random.normal(loc=0, scale=noise_std)
-                gen_noise = torch.tensor(gen_noise, dtype=prediction.dtype)
+                noise_std = noise_std_prediction_ext.squeeze() * self.noise_std * self.config["scaling_max_value"]
+
+                gen_noise = torch.normal(mean=0, std=noise_std)
+
                 prediction[non_zero_mask] += gen_noise[non_zero_mask]
             else:
-                noise = np.random.normal(
-                    loc=0, scale=self.noise_std, size=prediction.shape
-                )
-                noise = torch.tensor(
-                    noise, dtype=prediction.dtype, device=prediction.device
-                )
-                prediction[non_zero_mask] += noise[non_zero_mask]
+                gen_noise = torch.normal(mean=0, std=self.noise_std, size=prediction.shape, device=prediction.device)
 
-        # Clamp the tensor to ensure no negative values
+                prediction[non_zero_mask] += gen_noise[non_zero_mask]
+        
         prediction = torch.clamp(prediction, min=0)
 
-        # Create dict of read_id and predictions
         d = {}
         for read, pred in zip(read_id, prediction):
             d.setdefault(read, []).append(pred)
         self.results.append(d)
 
-        # Increment the sample count
         self.total_samples += data.shape[0]
-        if self.total_samples >= self.export_every_n_samples:
+        if isinstance(self.out_writer, BLOW5Writer) and self.total_samples >= self.export_every_n_samples:
             self.export_and_clear_results(keep_last=True)
             self.total_samples = 0  # Reset sample count
+    
 
     def export_and_clear_results(self, keep_last: bool = True):
         """

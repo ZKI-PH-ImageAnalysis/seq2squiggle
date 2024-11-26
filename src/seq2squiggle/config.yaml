@@ -9,7 +9,7 @@ log_name: "Human-R1041-4khz"
 wandb_logger_state: disabled # disabled, online, offline
 
 ### Preprocessing parameters
-max_chunks_train: 170000000 
+max_chunks_train: 210000000
 max_chunks_valid: 100000
 scaling_max_value: 165.0
 # If valid_dir is not provided, validation data will be generated from the training dataset.
@@ -28,9 +28,9 @@ encoder_layers: 2
 encoder_heads: 8
 decoder_layers: 2 
 decoder_heads: 8
-encoder_dropout: 0.1
-decoder_dropout: 0.1 
-duration_dropout: 0.1
+encoder_dropout: 0.2
+decoder_dropout: 0.2 
+duration_dropout: 0.2
 
 ### Learning rate parameters
 train_batch_size: 512
@@ -39,7 +39,7 @@ save_model: True
 # Optimizer. Allowed options: Adam, AdamW, SGD, RMSProp,
 optimizer: "Adam"
 warmup_ratio: 0.01 # Percentage of total steps used for warmup
-lr: 0.00025
+lr: 0.0005
 weight_decay: 0.0
 # Schedule for learning rate. Allowed options: warmup_cosine, warmup_constant, constant, warmup_cosine_restarts, one_cycle
 lr_schedule: "warmup_cosine"

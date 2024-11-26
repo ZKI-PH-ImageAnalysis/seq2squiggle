@@ -8,10 +8,12 @@ import os
 import numpy as np
 import logging
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, IterableDataset, Dataset
+from torch.utils.data import DataLoader, IterableDataset, Dataset, get_worker_info, DistributedSampler
+from torch.distributed import init_process_group, get_rank, get_world_size
 from multiprocessing.pool import ThreadPool as Pool
 import itertools
 import multiprocessing
+import torch.distributed as tdi
 
 from typing import Tuple, List, Optional, Dict, Generator
 from bisect import bisect
@@ -82,6 +84,8 @@ class PoreDataModule(pl.LightningDataModule):
         valid_dir: str = "path/to/dir",
         batch_size: int = 128,
         n_workers: int = 1,
+        rank: int = 0,
+        world_size: int = 1,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -90,6 +94,8 @@ class PoreDataModule(pl.LightningDataModule):
         self.config = config
         self.n_workers = n_workers
         self.total_l = total_l
+        self.rank = rank
+        self.world_size = world_size
 
     def setup(self, stage: str):
         if stage in ("fit", "validate"):
@@ -108,7 +114,7 @@ class PoreDataModule(pl.LightningDataModule):
         if stage in (None, "predict"):
             logger.debug("Loading fasta started")
             self.predict_loader_kwargs = load_fasta(
-                self.data_dir, self.config, self.total_l
+                self.data_dir, self.config, self.total_l, self.rank, self.world_size
             )
             logger.debug("Loading fasta ended")
 
@@ -134,7 +140,7 @@ class PoreDataModule(pl.LightningDataModule):
 
     def predict_dataloader(self):
         predict_loader = DataLoader(
-            batch_size=self.batch_size,  # self.batch_size
+            batch_size=self.batch_size,
             num_workers=self.n_workers,
             pin_memory=True,
             **self.predict_loader_kwargs,
@@ -253,6 +259,64 @@ class ChunkDataSetMemmap(Dataset):
         return self.data_count
 
 
+class DataParallelIterableDataSet(IterableDataset):
+    """
+    A PyTorch `IterableDataset` that wraps an iterable to provide data for prediction.
+    Multi-Threading not implemented yet.
+
+    Parameters
+    ----------
+    iterable : iterable
+        An iterable object that yields data samples.
+    length : int
+        The total length of the dataset.
+
+    Attributes
+    ----------
+    iterable : iterable
+        The iterable object used to provide data samples.
+    length : int
+        The length of the dataset, representing the number of samples.
+
+    Methods
+    -------
+    __iter__()
+        Returns the iterable object itself.
+    __len__()
+        Returns the length of the dataset.
+    """
+    def __init__(self, iterable, length, rank, world_size):
+        self.iterable = iterable
+        self.length = length
+        self.rank = rank
+        self.world_size = world_size
+
+    def __iter__(self):
+        # devices split
+        device_rank, num_devices = (tdi.get_rank(), tdi.get_world_size()) if tdi.is_initialized() else (0, 1)  
+        # workers split
+        worker_info = get_worker_info()
+        worker_rank, num_workers = (worker_info.id, worker_info.num_workers) if worker_info else (0, 1)
+
+        # total (devices + workers) split by device, then by worker
+        num_replicas = num_workers * num_devices
+        replica_rank = worker_rank * num_devices + device_rank
+        # by worker, then device would be:
+        # rank = device_rank * num_workers + worker_rank
+
+        for i, data in enumerate(self.iterable):
+            if i % num_replicas == replica_rank:
+                #print(f"Device: {device_rank}, worker {worker_rank} fetches sample {i}")
+                yield data
+            else:
+                continue
+
+        # return self.iterable
+
+
+    def __len__(self):
+        return self.length
+
 class IterableFastaDataSet(IterableDataset):
     """
     A PyTorch `IterableDataset` that wraps an iterable to provide data for prediction.
@@ -286,6 +350,7 @@ class IterableFastaDataSet(IterableDataset):
 
     def __iter__(self):
         return self.iterable
+
 
     def __len__(self):
         return self.length
@@ -335,7 +400,7 @@ def process_read(
 
 
 def load_fasta(
-    fasta: List[Tuple[str, str]], config: Dict, total_l: int
+    fasta: List[Tuple[str, str]], config: Dict, total_l: int, rank:int, world_size:int
 ) -> Dict[str, "DataLoader"]:
     """
     Loads and processes FASTA files into a dataset for prediction, using parallel processing.
@@ -379,12 +444,13 @@ def load_fasta(
     combined_generator = itertools.chain(*results)
 
     logger.debug("Splitting the reads to chunks finished.")
-
+    
     predict_loader_kwargs = {
+        #"dataset": DataParallelIterableDataSet(combined_generator, total_l, rank, world_size),
         "dataset": IterableFastaDataSet(combined_generator, total_l),
         "shuffle": False,
     }
-
+    
     return predict_loader_kwargs
 
 
@@ -424,59 +490,24 @@ def load_numpy(
         - Training DataLoader configuration with dataset and shuffle setting.
         - Validation DataLoader configuration with dataset and shuffle setting.
     """
+    def load_paths(directory: str, prefix: str) -> List[str]:
+        return sorted(
+            os.path.join(directory, f) for f in os.listdir(directory) if f.startswith(prefix)
+        )
+    
 
-    chunks_train = [
-        os.path.join(npy_train, filename)
-        for filename in os.listdir(npy_train)
-        if filename.startswith("chunks-")
-    ]
-    targets_train = [
-        os.path.join(npy_train, filename)
-        for filename in os.listdir(npy_train)
-        if filename.startswith("targets-")
-    ]
-    c_lengths_train = [
-        os.path.join(npy_train, filename)
-        for filename in os.listdir(npy_train)
-        if filename.startswith("chunks_lengths-")
-    ]
-    t_lengths_train = [
-        os.path.join(npy_train, filename)
-        for filename in os.listdir(npy_train)
-        if filename.startswith("targets_lengths-")
-    ]
-    stdevs_train = [
-        os.path.join(npy_train, filename)
-        for filename in os.listdir(npy_train)
-        if filename.startswith("stdevs-")
-    ]
+    chunks_train = load_paths(npy_train, "chunks-")
+    targets_train = load_paths(npy_train, "targets-")
+    c_lengths_train = load_paths(npy_train, "chunks_lengths-")
+    t_lengths_train = load_paths(npy_train, "targets_lengths-")
+    stdevs_train = load_paths(npy_train, "stdevs-")
 
-    if npy_valid is not None and os.path.exists(npy_valid):
-        chunks_valid = [
-            os.path.join(npy_valid, filename)
-            for filename in os.listdir(npy_valid)
-            if filename.startswith("chunks-")
-        ]
-        targets_valid = [
-            os.path.join(npy_valid, filename)
-            for filename in os.listdir(npy_valid)
-            if filename.startswith("targets-")
-        ]
-        c_lengths_valid = [
-            os.path.join(npy_valid, filename)
-            for filename in os.listdir(npy_valid)
-            if filename.startswith("chunks_lengths-")
-        ]
-        t_lengths_valid = [
-            os.path.join(npy_valid, filename)
-            for filename in os.listdir(npy_valid)
-            if filename.startswith("targets_lengths-")
-        ]
-        stdevs_valid = [
-            os.path.join(npy_train, filename)
-            for filename in os.listdir(npy_train)
-            if filename.startswith("stdevs-")
-        ]
+    if npy_valid and os.path.exists(npy_valid):
+        chunks_valid = load_paths(npy_valid, "chunks-")
+        targets_valid = load_paths(npy_valid, "targets-")
+        c_lengths_valid = load_paths(npy_valid, "chunks_lengths-")
+        t_lengths_valid = load_paths(npy_valid, "targets_lengths-")
+        stdevs_valid = load_paths(npy_valid, "stdevs-")
     else:
         # Lazy split for testing
         chunks_train, chunks_valid = train_test_split(
@@ -611,32 +642,10 @@ def sort_files(
         - Sorted target lengths file paths.
         - Sorted standard deviations file paths.
     """
-    # Extract the filename from each path
-    chunk_filenames = [path.split("/")[-1] for path in chunks_path]
-    target_filenames = [path.split("/")[-1] for path in targets_path]
-    clengths_filenames = [path.split("/")[-1] for path in c_lengths_path]
-    tlengths_filesnames = [path.split("/")[-1] for path in t_lengths_path]
-    stdevs_filesnames = [path.split("/")[-1] for path in stdevs_path]
+    def sort_by_filename(paths):
+        return sorted(paths, key=lambda path: path.split("/")[-1])
 
-    # Sort both lists based on filenames
-    sorted_chunk_paths = [path for _, path in sorted(zip(chunk_filenames, chunks_path))]
-    sorted_target_paths = [
-        path for _, path in sorted(zip(target_filenames, targets_path))
-    ]
-    sorted_clengths_paths = [
-        path for _, path in sorted(zip(clengths_filenames, c_lengths_path))
-    ]
-    sorted_tlengths_paths = [
-        path for _, path in sorted(zip(tlengths_filesnames, t_lengths_path))
-    ]
-    sorted_stdevs_paths = [
-        path for _, path in sorted(zip(stdevs_filesnames, stdevs_path))
-    ]
-
-    return (
-        sorted_chunk_paths,
-        sorted_target_paths,
-        sorted_clengths_paths,
-        sorted_tlengths_paths,
-        sorted_stdevs_paths,
+    return tuple(
+        sort_by_filename(path_list) for path_list in
+        [chunks_path, targets_path, c_lengths_path, t_lengths_path, stdevs_path]
     )
