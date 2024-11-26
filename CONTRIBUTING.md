@@ -76,7 +76,15 @@ git tag v0.3.1
 git push origin v0.3.1
 ```
 
-Now go to github.com and do a release, selecting the version number tag you just pushed. This will automatically trigger the new version being tested and pushed to PyPI if the tests pass.
+Now go to github.com and do a release, selecting the version number tag you just pushed. 
+
+Last step - Publish the new package to PyPI:
+
+```sh
+poetry build
+poetry publish
+```
+
 
 ### Updating the python version dependency
 
