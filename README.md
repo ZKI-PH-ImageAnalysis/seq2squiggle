@@ -90,9 +90,9 @@ seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.0 --noise-samp
 ```
 Using the noise sampler and a static normal distribution for event durations:
 ```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --ideal-event-length -1
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-std 4.0
 ```
-Using the noise sampler with ideal event lengths:
+Using the noise sampler with ideal event lengths (each k-mer event will have a length of 10):
 ```
 seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0
 ```
