@@ -6,7 +6,7 @@
 
 
 Please cite the following publication if you use `seq2squiggle` in your work:
-- Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renard, B. Y., & Körber, N. (2024). End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv. doi:10.1101/2024.08.12.607296 
+- Beslic D, Kucklick M, Engelmann S, Fuchs S, Renard BY, Körber N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. *Bioinformatics*. 2024; btae744. [doi:10.1093/bioinformatics/btae744](https://doi.org/10.1093/bioinformatics/btae744). 
 
 ## Installation 
 
@@ -24,6 +24,11 @@ conda activate seq2squiggle-env
 ### Install with pip
 ```
 pip install seq2squiggle 
+```
+
+### Install with conda or mamba
+```
+mamba install seq2squiggle
 ```
 
 ### Install from source
