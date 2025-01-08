@@ -95,7 +95,7 @@ def main():
     - [https://github.com/ZKI-PH-ImageAnalysis/seq2squiggle]()
 
     Please cite the following publication if you use seq2squiggle in your work:
-    - Beslic, D., Kucklick, M., Engelmann, S., Fuchs, S., Renards, B.Y., Koerber, N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. bioRxiv (2024).
+    - Beslic D, Kucklick M, Engelmann S, Fuchs S, Renard BY, Körber N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. *Bioinformatics*. 2024; btae744. [https://doi.org/10.1093/bioinformatics/btae744]() 
     """
 
 
