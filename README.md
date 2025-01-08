@@ -6,7 +6,7 @@
 
 
 Please cite the following publication if you use `seq2squiggle` in your work:
-- Beslic D, Kucklick M, Engelmann S, Fuchs S, Renard BY, Körber N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. *Bioinformatics*. 2024; btae744. [doi:10.1093/bioinformatics/btae744](https://doi.org/10.1093/bioinformatics/btae744). 
+- Beslic D, Kucklick M, Engelmann S, Fuchs S, Renard BY, Körber N. End-to-end simulation of nanopore sequencing signals with feed-forward transformers. *Bioinformatics*. 2024; btae744. [doi:10.1093/bioinformatics/btae744](https://doi.org/10.1093/bioinformatics/btae744) 
 
 ## Installation 
 
