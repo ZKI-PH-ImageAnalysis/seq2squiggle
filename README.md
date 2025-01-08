@@ -28,7 +28,7 @@ pip install seq2squiggle
 
 ### Install with conda or mamba
 ```
-mamba install seq2squiggle
+mamba install seq2squiggle -c bioconda
 ```
 
 ### Install from source
