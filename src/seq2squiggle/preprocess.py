@@ -390,7 +390,7 @@ def process_df(
     # add 0s so that remainder is 0
     df = df.with_columns(pl.col("end_idx").sub(pl.col("start_idx")).alias("signal_len"))
     # Filter out events above a length of 25.0
-    df = df.filter(pl.col("signal_len") <= 25)
+    # df = df.filter(pl.col("signal_len") <= 25)
     # Filter out events above a noise of 10.0
     # df = df.filter(pl.col("event_stdv") <= 10)
     signal_len = df.select(pl.col(["signal_len"])).to_numpy().squeeze()
