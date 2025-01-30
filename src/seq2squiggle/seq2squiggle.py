@@ -225,9 +225,9 @@ def conditional_option(f):
     )(f)
     f = click.option(
         "--dwell-mean",
-        default=9.0,
+        default=None,
         type=float,
-        help="Specify the mean dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
+        help="Specify the mean dwell time (= number of signal points per k-mer). This will only be used if the duration sampler is deactivated.",
         show_default=True,
         hidden=True  # Hidden by default
     )(f)
@@ -273,9 +273,17 @@ def conditional_option(f):
     )(f)
     f = click.option(
         "--sample-rate",
-        default=5000,
+        default=None,
         type=int,
         help="Specify the sampling rate.",
+        show_default=True,
+        hidden=True  # Hidden by default
+    )(f)
+    f = click.option(
+        "--bps",
+        default=None,
+        type=int,
+        help="Specify the translocation speed.",
         show_default=True,
         hidden=True  # Hidden by default
     )(f)
@@ -411,6 +419,7 @@ def predict(
     predict_batch_size,
     export_every_n_samples,
     sample_rate,
+    bps,
     digitisation,
     range_val,
     offset_mean,
@@ -468,6 +477,7 @@ def predict(
         "predict_batch_size": predict_batch_size,
         "export_every_n_samples": export_every_n_samples,
         "sample_rate": sample_rate,
+        "bps": bps,
         "digitisation": digitisation,
         "range": range_val,
         "offset_mean": offset_mean,
@@ -510,6 +520,7 @@ def predict(
         predict_batch_size=predict_batch_size,
         export_every_n_samples=export_every_n_samples,
         sample_rate=sample_rate,
+        bps=bps,
         digitisation=digitisation,
         range_val=range_val,
         offset_mean=offset_mean,

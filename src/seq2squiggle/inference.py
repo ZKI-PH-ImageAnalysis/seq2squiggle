@@ -277,6 +277,7 @@ def inference_run(
     predict_batch_size: int,
     export_every_n_samples: int,
     sample_rate: int,
+    bps: int,
     digitisation: int,
     range_val: float,
     offset_mean: float,
@@ -333,12 +334,16 @@ def inference_run(
     """
     profile_dict = get_profile(profile)
     profile_dict = update_profile(profile_dict, sample_rate=sample_rate,
+        bps = bps,
         digitisation=digitisation,
         range=range_val,
         offset_mean=offset_mean,
         offset_std=offset_std,
         median_before_mean=median_before_mean,
         median_before_std=median_before_std)
+    
+    if dwell_mean is None:
+        dwell_mean = config["sample_rate"] / config["bps"]
 
     # Update config based on profile_dict
     config = update_config(profile, config)

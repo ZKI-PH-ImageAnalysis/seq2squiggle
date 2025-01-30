@@ -148,6 +148,7 @@ def get_profile(profile):
         "dna-r10-min": {
             "digitisation": 8192,
             "sample_rate": 5000,
+            "bps": 400,
             "range": 1536.598389,
             "offset_mean": 13.380569389019,
             "offset_std": 16.311471649012,
@@ -157,6 +158,7 @@ def get_profile(profile):
         "dna-r10-prom": {
             "digitisation": 2048,
             "sample_rate": 5000,
+            "bps": 400,
             "range": 281.345551,
             "offset_mean": -127.5655735,
             "offset_std": 19.377283387665,
@@ -166,6 +168,7 @@ def get_profile(profile):
         "dna-r9-min": {
             "digitisation": 8192,
             "sample_rate": 4000,
+            "bps": 450,
             "range": 1443.030273,
             "offset_mean": 13.7222605,
             "offset_std": 10.25279688,
@@ -175,11 +178,32 @@ def get_profile(profile):
         "dna-r9-prom": {
             "digitisation": 2048,
             "sample_rate": 4000,
+            "bps": 450,
             "range": 748.5801,
             "offset_mean": -237.4102,
             "offset_std": 14.1575,
             "median_before_mean": 214.2890337,
             "median_before_std": 18.0127916,
+        },
+        "rna-004-min": {
+            "digitisation": 8192,
+            "sample_rate": 4000,
+            "bps": 130,
+            "range": 1437.976685,
+            "offset_mean": 12.47686423863,
+            "offset_std": 10.442126577137,
+            "median_before_mean": 205.08496731088,
+            "median_before_std": 8.6671292866233,
+        },
+        "rna-004-prom": {
+            "digitisation": 2048,
+            "sample_rate": 4000,
+            "bps": 130,
+            "range": 299.432068,
+            "offset_mean": -259.421128,
+            "offset_std": 16.010841823643,
+            "median_before_mean": 189.87607393756,
+            "median_before_std": 15.788097978713,
         },
     }
 
@@ -228,7 +252,7 @@ def update_config(profile_name, config):
     Returns:
         dict: The updated configuration dictionary.
     """
-    if profile_name.startswith("dna-r10"):
+    if profile_name.startswith("dna-r10") or profile_name.startswith("rna-004"):
         config["seq_kmer"] = 9
     elif profile_name.startswith("dna-r9"):
         config["seq_kmer"] = 6
