@@ -343,7 +343,7 @@ def inference_run(
         median_before_std=median_before_std)
     
     if dwell_mean is None:
-        dwell_mean = config["sample_rate"] / config["bps"]
+        dwell_mean = profile_dict["sample_rate"] / profile_dict["bps"]
 
     # Update config based on profile_dict
     config = update_config(profile, config)
