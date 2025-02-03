@@ -121,14 +121,24 @@ def main():
     "--chunksize",
     type=int,
     show_default=True,
-    default=100000,
+    default=10000000,
     help="Specify the chunk size for each batch.",
+)
+@click.option(
+    "--partition_by",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Process the events.tsv file by partitioning it into groups based on read names."
+         "If enabled, each read will be processed independently, which may improve memory efficiency "
+         "for large datasets but increases processing time.",
 )
 def preprocess(
     events_path,
     outdir,
     no_batches,
     chunksize,
+    partition_by,
     seed,
     model,
     config,
@@ -149,6 +159,7 @@ def preprocess(
         outdir=outdir,
         batches=no_batches,
         chunksize=chunksize,
+        partition_by=partition_by,
         config=config,
     )
     logger.info("Preprocessing done.")
@@ -389,7 +400,7 @@ def conditional_option(f):
     "--profile",
     default="dna-r10-prom",
     show_default=True,
-    type=click.Choice(["dna-r10-prom", "dna-r10-min", "dna-r9-prom", "dna-r9-min"]),
+    type=click.Choice(["dna-r10-prom", "dna-r10-min", "dna-r9-prom", "dna-r9-min", "rna-004-prom", "rna-004-min"]),
     help="Select a profile for data simulation. The profile determines values for digitization, sample rate, range, offset mean, offset standard deviation, median before mean, and median before standard deviation.",
 )
 @click.option(

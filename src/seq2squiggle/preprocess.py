@@ -385,53 +385,43 @@ def process_df(
         - Array of standard deviations for each event.
     """
     # Filter out artifacts of uncalled4 signal processing
-    df = df.sort(["position"]).filter(pl.col("model_kmer") != ("N" * config["seq_kmer"]))
+    df = (
+        df.sort(["position"])
+        .filter(pl.col("model_kmer") != ("N" * config["seq_kmer"]))
+        .with_columns((pl.col("end_idx") - pl.col("start_idx")).alias("signal_len"))
+        )
 
-    # add 0s so that remainder is 0
-    df = df.with_columns(pl.col("end_idx").sub(pl.col("start_idx")).alias("signal_len"))
-    # Filter out events above a length of 25.0
-    # df = df.filter(pl.col("signal_len") <= 25)
-    # Filter out events above a noise of 10.0
-    # df = df.filter(pl.col("event_stdv") <= 10)
-    signal_len = df.select(pl.col(["signal_len"])).to_numpy().squeeze()
+    logger.debug("Sorted polars dataframe")
 
-    # process DNA
-    dna_seq = df["model_kmer"].to_list()    
-
-    # Add remainder
-    remain = config["max_dna_len"] - (len(dna_seq) % config["max_dna_len"])
-    zero_array = [("_" * config["seq_kmer"])] * remain
-    dna_seq = dna_seq + zero_array
-
-    # One hot encode sequence
-    dna_seq = one_hot_encode(dna_seq, len(dna_seq[0]))
-
-    # Process the signal
-    signal = df["samples"].to_list()
-    signal = [i.split(",") for i in signal]
-
-    # Process the noise std
+    # Extract columns
+    signal_len = df["signal_len"].to_numpy().squeeze()
+    dna_seq = df["model_kmer"].to_list()
+    logger.debug("Processing signal data.")
+    signal_flat = df["samples"].str.split(",").explode().cast(pl.Float32).to_numpy()
+    logger.debug("Signal data processed.")
     stdevs = df["event_stdv"].to_numpy()
 
-    # Extend the list such that it has sam length as signal
+    # Add remainder to DNA sequence
+    remain = config["max_dna_len"] - (len(dna_seq) % config["max_dna_len"])
+    dna_seq.extend(["_" * config["seq_kmer"]] * remain)
+
+    # One-hot encode DNA sequences
+    logger.debug("One-hot encoding DNA sequences...")
+    dna_seq_encoded = one_hot_encode(dna_seq, len(dna_seq[0]))
+    logger.debug("DNA sequences one-hot encoded.")
+    
+    # Extend signal-related arrays
     zero_array = np.zeros(remain, dtype=np.float32)
-    # add 0s so that for each appended _ char you have a single signal point with value 0
+    signal_flat = np.append(signal_flat, zero_array)
     stdevs = np.append(stdevs, zero_array)
-
-    # All signals into one list
-    signal = [float(item) for sublist in signal for item in sublist]
-    zero_array = np.zeros(remain, dtype=np.float32)
-
-    # add 0s so that for each appended _ char you have a single signal point with value 0
-    signal = np.append(signal, zero_array)
-
     one_array = np.ones(remain, dtype=np.int16)
-
-    # add 1s so each _ maps to a 0 in the signal
     signal_len = np.append(signal_len, one_array)
-
+    
+    # Generate DNA-to-signal mapping indices
     dna2signal_idxs = get_dna2signal_idxs(signal_len)
-    return dna_seq, signal, signal_len, dna2signal_idxs, stdevs
+    
+    return dna_seq_encoded, signal_flat, signal_len, dna2signal_idxs, stdevs
+
 
 
 def get_dna2signal_idxs(signal_len: List[int]) -> List[Tuple[int, int]]:
@@ -459,7 +449,7 @@ def get_dna2signal_idxs(signal_len: List[int]) -> List[Tuple[int, int]]:
 
 
 def split_eventtable_in_chunks(
-    event_df: Any, config: dict, num_chunks: Optional[int] = None
+    event_df: Any, config: dict, num_chunks: Optional[int] = None, partition_by: Optional[str] = None,
 ) -> ChunkDataSet:
     """
     Splits the event dataframe into chunks, processes each chunk, and pads them to a uniform length.
@@ -478,21 +468,28 @@ def split_eventtable_in_chunks(
     ChunkDataSet
         An instance of ChunkDataSet containing the processed and padded chunks.
     """
-    df_slice = event_df.partition_by("read_name")
-
-    all_chunks = (
-        (chunks, targets, chunk_len, stdevs)
-        for df_single_read in df_slice
-        for chunks, targets, chunk_len, stdevs in get_chunks(
-            process_df(df_single_read, config), config
+    if partition_by:
+        logger.debug("Paritioning the events.tsv by read name")
+        df_slice = event_df.partition_by("read_name")
+        all_chunks = (
+            (chunks, targets, chunk_len, stdevs)
+            for df_single_read in df_slice
+            for chunks, targets, chunk_len, stdevs in get_chunks(
+                process_df(df_single_read, config), config
+            )
         )
-    )
-
-    chunks, targets, chunks_len, stdevs = zip(
-        *tqdm(
-            take(all_chunks, num_chunks), total=num_chunks, desc="Processing to chunks"
+    else:
+        all_chunks = (
+            (chunks, targets, chunk_len, stdevs)
+            for chunks, targets, chunk_len, stdevs in get_chunks(
+                process_df(event_df, config), config
+            )
         )
-    )
+
+    chunk_list = list(take(all_chunks, num_chunks))
+    processed_count = len(chunk_list)
+    chunks, targets, chunks_len, stdevs = zip(*chunk_list)
+    logger.info(f"Total processed chunks: {processed_count}")
 
     logger.debug("Padding chunks")
     targets, targets_len = pad_lengths(targets, max_len=config["max_signal_len"])
@@ -501,7 +498,7 @@ def split_eventtable_in_chunks(
 
 
 def process_events(
-    events_path: str, outdir: str, max_chunks: int, config: Dict[str, any]
+    events_path: str, outdir: str, max_chunks: int, partition_by: Optional[bool], config: Dict[str, any]
 ) -> None:
     """
     Reads, processes, filters, and saves event data from a TSV file.
@@ -524,7 +521,7 @@ def process_events(
     logger.debug("Reading and processing events.tsv")
 
     event_df = pl.read_csv(os.path.join(events_path), separator="\t")
-    training_chunks = split_eventtable_in_chunks(event_df, config, max_chunks)
+    training_chunks = split_eventtable_in_chunks(event_df, config, max_chunks, parition_by=partition_by)
     logger.debug(
         f"  - Total amount of chunks: {training_chunks.chunks.squeeze(1).shape[0]}"
     )
@@ -545,6 +542,7 @@ def process_events_in_batches(
     events_path: str,
     outdir: str,
     max_chunks: int,
+    partition_by: Optional[bool],
     chunksize: int,
     config: Dict[str, any],
 ) -> None:
@@ -577,12 +575,12 @@ def process_events_in_batches(
         batch_size=chunksize,
         n_rows=max_chunks,
     )
-    batches = reader.next_batches(100)
+    batches = reader.next_batches(1)
     counter = 0
     while batches:
         logger.info(f"Processing batch {counter}")
         df_current_batches = pl.concat(batches)
-        training_chunks = split_eventtable_in_chunks(df_current_batches, config)
+        training_chunks = split_eventtable_in_chunks(df_current_batches, config, partition_by=partition_by)
         training_indices = typical_indices(
             training_chunks.t_lengths, config["max_signal_len"]
         )
@@ -593,11 +591,11 @@ def process_events_in_batches(
         )
         save_chunks_in_batches(training_chunks, outdir, counter)
         counter += 1
-        batches = reader.next_batches(100)
+        batches = reader.next_batches(1)
 
 
 def preprocess_run(
-    events_path: str, outdir: str, batches: bool, chunksize: int, config: Dict[str, any]
+    events_path: str, outdir: str, batches: bool, chunksize: int, partition_by: Optional[bool], config: Dict[str, any]
 ) -> None:
     """
     Preprocesses event data from a file by either processing it all at once or in batches.
@@ -626,6 +624,6 @@ def preprocess_run(
         batches = False
 
     if batches == False:
-        process_events(events_path, outdir, max_chunks, config)
+        process_events(events_path, outdir, max_chunks, partition_by, config)
     else:
-        process_events_in_batches(events_path, outdir, max_chunks, chunksize, config)
+        process_events_in_batches(events_path, outdir, max_chunks, partition_by, chunksize, config)

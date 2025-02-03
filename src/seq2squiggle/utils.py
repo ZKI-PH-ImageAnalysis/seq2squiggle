@@ -51,6 +51,7 @@ def n_workers() -> int:
     return n_cpu // n_gpu if (n_gpu := torch.cuda.device_count()) > 1 else n_cpu
 
 
+
 def one_hot_encode(sequences: List[str], seq_len: int) -> np.ndarray:
     """
     One-hot encodes a list of DNA sequences.
