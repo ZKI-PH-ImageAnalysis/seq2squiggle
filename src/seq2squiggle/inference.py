@@ -28,7 +28,7 @@ logger = logging.getLogger("seq2squiggle")
 
 
 def get_writer(
-    out: str, profile: object, ideal_mode: bool, export_every_n_samples: int
+    out: str, profile: object, ideal_mode: bool, export_every_n_samples: int, profile_name: str,
 ) -> tuple:
     """
     Returns an appropriate file writer object based on the output file extension.
@@ -53,12 +53,17 @@ def get_writer(
     pod5_ext = ".pod5"
     out_base = os.path.basename(out)
 
+    # Ensure the output directory exists
+    out_dir = os.path.dirname(out)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+
     if os.path.exists(out):
         logger.warning(f"Output file {out} already exists. File will be deleted.")
         os.remove(out)
 
     if any(out_base.endswith(ext) for ext in slow5_ext):
-        return BLOW5Writer(out, profile, ideal_mode), export_every_n_samples
+        return BLOW5Writer(out, profile, ideal_mode, profile_name), export_every_n_samples
     elif out_base.endswith(pod5_ext):
         logger.warning("POD5 Writer does not support appending to an existing file.")
         logger.warning(
@@ -67,7 +72,7 @@ def get_writer(
         logger.warning(
             "This might lead to Out of Memory errors for large-scale simulations. Consider exporting to BLOW5/SLOW5 and using the blue_crab tool for conversion to pod5."
         )
-        return POD5Writer(out, profile, ideal_mode), float("inf")
+        return POD5Writer(out, profile, ideal_mode, profile_name), float("inf")
     else:
         logger.error("Output file must have .pod5, .slow5, or .blow5 extension.")
         raise ValueError("Output file must have .pod5, .slow5, or .blow5 extension.")
@@ -351,7 +356,7 @@ def inference_run(
     ideal_mode = not(duration_sampling or dwell_std > 0)
     
     writer, export_every_n_samples = get_writer(
-        out, profile_dict, ideal_mode, export_every_n_samples
+        out, profile_dict, ideal_mode, export_every_n_samples, profile_name=profile
     )
 
     if saved_weights is None:
@@ -383,8 +388,7 @@ def inference_run(
 
     check_model(load_model, config)
 
-    reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed)
-
+    reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed, profile)
 
     # "gamma_cpu" not implemented for 'BFloat16'
     precision = "16-mixed" if torch.cuda.device_count() >= 1 else "32"
@@ -395,7 +399,6 @@ def inference_run(
         devices="auto",
         logger=False,
         strategy=_get_strategy(),
-        # use_distributed_sampler=False
     )
 
     rank = trainer.global_rank

@@ -11,8 +11,17 @@ import pod5
 from datetime import datetime
 import os
 from uuid import uuid4
+import uuid
 
 logger = logging.getLogger("seq2squiggle")
+
+
+def indexed_uuid(index: int) -> uuid.UUID:
+    """
+    Generate a UUID4-like but incrementing UUID using an index.
+    """
+    return uuid.UUID(f"00000000-0000-0000-0000-{index:012d}")
+
 
 
 class BLOW5Writer:
@@ -25,10 +34,11 @@ class BLOW5Writer:
         The name of the slow5 file.
     """
 
-    def __init__(self, filename, profile, ideal_mode):
+    def __init__(self, filename, profile, ideal_mode, profile_name):
         self.filename = filename
         self.profile: dict = profile
         self.ideal_mode = ideal_mode
+        self.profile_name = profile_name
         self.signals = None
         self.median_before = float(self.profile["median_before_mean"])
         self.median_before_std = float(self.profile["median_before_std"])
@@ -57,10 +67,12 @@ class BLOW5Writer:
         if f_mode == 'w':
             header, end_reason_labels  = s5.get_empty_header(aux=True)
             header['asic_id'] = 'asic_id_0'
-            header['exp_start_time'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-            header['experiment_type'] = 'genomic_dna'
+            header['exp_start_time'] = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
             header['run_id'] = 'run_id_0'
+            header['flow_cell_id'] = 'FAN00000'
+            header['experiment_type'] = 'rna' if self.profile_name.startswith("rna") else 'genomic_dna'
             header['sample_frequency'] = int(self.sample_rate)
+            header['sequencing_kit'] = 'sqk-rna004' if self.profile_name.startswith("rna") else 'sqk-lsk114'
 
             # Remove any fields with None values from header
             header = {key: value for key, value in header.items() if value is not None}
@@ -71,21 +83,30 @@ class BLOW5Writer:
         auxs = {}
 
         for idx, (read_id, signal) in enumerate(self.signals.items()):
+            if len(signal) == 0:
+                logger.debug("Empty signal, skipping {}".format(read_id))
+                continue
+            
             if self.ideal_mode:
+                median_before_value = self.median_before
+                offset_value = self.offset
+            else:
                 median_before_value = np.random.normal(
                     self.median_before, self.median_before_std
                 )
-                offset_value = np.random.normal(self.offset, self.offset_std)
-            else:
-                median_before_value = self.median_before
-                offset_value = self.offset
+                offset_value = np.random.normal(self.offset, self.offset_std)    
             signal = signal.cpu().numpy().astype(np.float32)
             signal_raw = np.round(
                 signal * self.digitisation / self.signal_range - self.offset
             )
             signal_raw = signal_raw.astype(np.int16)
+
+            if self.profile_name.startswith("rna"):
+                signal_raw = np.ascontiguousarray(signal_raw[::-1])
+
             record, aux = s5.get_empty_record(aux=True)
-            record["read_id"] = str(read_id)
+
+            record["read_id"] = str(indexed_uuid(idx + 1)) #read_id
             record["read_group"] = 0
             record["digitisation"] = self.digitisation
             record["offset"] = offset_value
@@ -121,10 +142,11 @@ class POD5Writer:
         The name of the pod5 file.
     """
 
-    def __init__(self, filename, profile, ideal_mode):
+    def __init__(self, filename, profile, ideal_mode, profile_name):
         self.filename = filename
         self.profile: dict = profile
         self.ideal_mode = ideal_mode
+        self.profile_name = profile_name
         self.signals = None
         self.median_before = float(self.profile["median_before_mean"])
         self.median_before_std = float(self.profile["median_before_std"])
@@ -168,11 +190,13 @@ class POD5Writer:
             tracking_id={},
         )
 
-
-
         pod5_reads = []
 
         for idx, (read_id, signal) in enumerate(self.signals.items()):
+            if len(signal) == 0:
+                logger.debug("Empty signal, skipping {}".format(read_id))
+                continue
+
             if self.ideal_mode:
                 median_before_value = np.random.normal(
                     self.median_before, self.median_before_std
@@ -186,6 +210,9 @@ class POD5Writer:
                 signal * self.digitisation / self.signal_range - self.offset
             )
             signal_raw = signal_raw.astype(np.int16)
+            
+            if self.profile_name.startswith("rna"):
+                signal_raw = signal_raw[::-1]
 
             pore = pod5.Pore(channel=123, well=3, pore_type="not_set")
             calibration = pod5.Calibration(
@@ -197,7 +224,7 @@ class POD5Writer:
             )
 
             read = pod5.Read(
-                read_id=uuid4(),
+                read_id=indexed_uuid(idx + 1),
                 pore=pore,
                 calibration=calibration,
                 read_number=idx,
