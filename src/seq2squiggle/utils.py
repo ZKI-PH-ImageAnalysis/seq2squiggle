@@ -20,6 +20,7 @@ import psutil
 import multiprocessing
 from typing import List, Generator, Tuple, Union
 from uuid import uuid4
+import wandb
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -286,7 +287,7 @@ def regular_break_points(n, chunk_len, overlap=0, align="left"):
     return np.vstack([starts, starts + chunk_len]).T
 
 
-def read_fasta(path: str) -> Generator[Tuple[str, str], None, None]:
+def read_fasta(path: str, rna: bool) -> Generator[Tuple[str, str], None, None]:
     """
     Reads sequences and their names from a FASTA file.
 
@@ -349,6 +350,8 @@ def add_remainder(x, max_dna, k):
 def split_sequence(x, config):
     x = extract_kmers(x, config["seq_kmer"])
     x = add_remainder(x, config["max_dna_len"], config["seq_kmer"])
+    #if "_________" in x:
+    #    x = ["_________"] * len(x)
     x = one_hot_encode(x, config["seq_kmer"])
     breakpoints = regular_break_points(len(x), config["max_dna_len"], align="left")
     x_breaks = np.array([x[i:j] for (i, j) in breakpoints])
@@ -548,6 +551,56 @@ def sample_reads_from_genome(
     return reads_fasta, total_l
 
 
+def sample_reads_from_transcriptome(
+    transcriptome_seqs: List[str],
+    transcriptome_lens: List[int],
+    n: int,
+    seed: int,
+    save: bool = False,
+    fasta: str = "output.fasta",
+) -> Tuple[Union[str, None], int]:
+    """
+    Sample full transcripts from the transcriptome sequences.
+
+    Parameters
+    ----------
+    transcriptome_seqs : List[str]
+        List of transcript sequences.
+    transcriptome_lens : List[int]
+        List of lengths of transcript sequences.
+    n : int
+        Number of transcripts to sample. If -1, use all available transcripts.
+    seed : int
+        Random seed for reproducibility.
+    save : bool, optional
+        If True, save the sampled transcripts to a FASTA file (default is False).
+    fasta : str, optional
+        Path to the FASTA file for saving (default is "output.fasta").
+
+    Returns
+    -------
+    Tuple[Union[str, None], int]
+        If `save` is True, returns the path to the saved FASTA file and the total length of sequences.
+        If `save` is False, returns a generator of sampled transcripts and the total length.
+    """
+    logger.debug("Sampling full transcripts from transcriptome.")
+    random.seed(seed)
+    
+    if n == -1 or n > len(transcriptome_seqs):
+        sampled_transcripts = transcriptome_seqs  # Use all transcripts if n is -1
+    else:
+        sampled_transcripts = random.sample(transcriptome_seqs, n)
+    
+    total_length = sum(len(seq) for seq in sampled_transcripts)
+    
+    if save:
+        reads_fasta = export_fasta(sampled_transcripts, fasta)
+        return reads_fasta, total_length
+    else:
+        return yield_reads(sampled_transcripts), total_length
+
+
+
 def load_genome(fasta):
     with FastxFile(fasta) as fh:
         for entry in fh:
@@ -602,25 +655,21 @@ def preprocess_genome(fasta: str):
     return genome_seq_list, genome_len_list
 
 
-def get_reads(fasta, read_input, n, r, c, config, distr, seed, save=False):
-    if read_input == False:
-        logger.info(f"Genome mode. Reads will be generated from input fasta: {fasta}")
-        genome_seqs, genome_lens = preprocess_genome(fasta)
-        reads_fasta, total_l = sample_reads_from_genome(
-            genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr
-        )
-        if save:
-            return read_fasta(reads_fasta)
-        return reads_fasta, total_l
-    else:
-        logger.info(
-            f"Read mode. Signals will be simulated directly from reads: {fasta}"
-        )
-        reads_generator = read_fasta(fasta)
-        total_reads, total_length = compute_totals(reads_generator)
-        # Recreate the generator for actual use
-        reads_generator = read_fasta(fasta)
-        return reads_generator, total_length
+def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, save=False):
+    logger.info(f"{'Read' if read_input else 'Transcriptome' if profile.startswith('rna') else 'Genome'} mode.")
+
+    genome_seqs, genome_lens = preprocess_genome(fasta) if not read_input or profile.startswith("rna") else (None, None)
+
+    if read_input: # Read mode
+        reads_generator = read_fasta(fasta, profile.startswith("rna"))
+        return reads_generator, compute_totals(read_fasta(fasta, profile.startswith("rna")))[1]
+    elif profile.startswith("rna"): # Transcriptome mode
+        reads_fasta, total_l = sample_reads_from_transcriptome(genome_seqs, genome_lens, n, seed, save, distr)
+        # reads_fasta, total_l = sample_reads_from_genome(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr)
+    else: # Genome mode
+        reads_fasta, total_l = sample_reads_from_genome(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr)
+    
+    return read_fasta(reads_fasta, profile.startswith("rna")) if save else (reads_fasta, total_l)
 
 
 def count_parameters(model):
@@ -728,7 +777,9 @@ def generate_validation_plots(
     prediction_idealtime,
     targets,
     data,
+    data_ls,
     log_dir,
+    config,
     bs=12,
     devices=0,
 ):
@@ -741,6 +792,10 @@ def generate_validation_plots(
     prediction_idealamp = prediction_idealamp[:bs]
     prediction_idealtime = prediction_idealtime[:bs]
     data = data[:bs]
+    data_ls = data_ls[:bs]
+    # Lists to store image paths for logging
+    reference_image_paths = []
+    all_signals_image_paths = []
 
     for batch_idx, (
         batch_pred,
@@ -748,63 +803,147 @@ def generate_validation_plots(
         batch_pred_idealtime,
         batch_target,
         batch_dna,
+        batch_reflen,
     ) in enumerate(
-        zip(prediction, prediction_idealamp, prediction_idealtime, targets, data)
+        zip(prediction, prediction_idealamp, prediction_idealtime, targets, data, data_ls)
     ):
+        seq_len, _, = batch_dna.shape
+        batch_dna = batch_dna.reshape(seq_len, config["seq_kmer"], len(config["allowed_chars"]))
+        batch_dna_str = decode_one_hot(batch_dna.cpu().data.numpy())
+        batch_reflen = batch_reflen.cpu().data.numpy()
+
         plot_signal(
             batch_pred,
             batch_pred_idealamp,
             batch_pred_idealtime,
             batch_target,
-            batch_dna,
+            batch_dna_str,
+            batch_reflen,
             self.current_epoch,
             self.config["log_name"],
             batch_idx,
             log_dir=log_dir,
         )
+        # Collect saved image paths
+        out_dir = os.path.join(log_dir, f"epoch_{self.current_epoch}/")
+        reference_image_file = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
+        all_signals_image_file = os.path.join(out_dir, f"batch_{batch_idx}_all_signals.png")
 
+        if os.path.exists(reference_image_file):
+            reference_image_paths.append(reference_image_file)
+        if os.path.exists(all_signals_image_file):
+            all_signals_image_paths.append(all_signals_image_file)
+    # TODO Log with wandb
+
+def reconstruct_full_sequence(kmers):
+        """
+        Reconstructs the full DNA sequence from overlapping k-mers.
+        
+        Parameters
+        ----------
+        kmers : List[str]
+            A list of overlapping k-mer sequences.
+        
+        Returns
+        -------
+        str
+            The reconstructed full DNA sequence.
+        """
+        full_sequence = kmers[0]  # Start with the first k-mer
+        for kmer in kmers[1:]:
+            full_sequence += kmer[-1]  # Append the last character of each subsequent k-mer
+        return full_sequence
 
 def plot_signal(
     batch_pred,
     batch_pred_idealamp,
     batch_pred_idealtime,
     target,
-    data_input,
+    batch_dna_str,
+    batch_reflen,
     epoch,
     log_name,
     batch_idx,
     log_dir,
     dec_output_FR=None,
-):
-    # Convert data_input to numpy array
-    data_input = data_input.cpu().data.numpy()
-
-    # Create a figure and axis
-    fig, ax = plt.subplots()
-    ax.yaxis.set_minor_locator(AutoMinorLocator())
-    ax.xaxis.set_minor_locator(AutoMinorLocator())
-
-    # Set labels and grid
-    plt.xlabel("Time")
-    plt.ylabel("Normalized signal")
-    plt.grid(which="major", linestyle="solid")
-    plt.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
-
-    # Plot true and predicted signals
-    X_time = range(0, len(target.flatten()))
-    plt.plot(X_time, target.flatten(), label="True")
-    plt.plot(X_time, batch_pred.flatten(), label="Default pred")
-    plt.plot(X_time, batch_pred_idealamp.flatten(), label="Ideal amp pred")
-    plt.plot(X_time, batch_pred_idealtime.flatten(), label="Ideal time pred")
-    plt.legend(loc="lower left")
+):  
+    
+    full_sequence = reconstruct_full_sequence(batch_dna_str)
 
     # Create output directory if it doesn't exist
     out_dir = os.path.join(log_dir, f"epoch_{epoch}/")
     os.makedirs(out_dir, exist_ok=True)
 
+    # Plot 1: Reference Signal with k-mers
+    fig1, ax1 = plt.subplots(figsize=(12, 6))
+    ax1.yaxis.set_minor_locator(AutoMinorLocator())
+    ax1.xaxis.set_minor_locator(AutoMinorLocator())
+
+    # Set labels and grid
+    plt.xlabel("Signal Points")
+    plt.ylabel("Current (pA)")
+    plt.grid(which="major", linestyle="solid")
+    plt.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
+
+    # Plot reference signal
+    X_time = range(0, len(target.flatten()))
+    plt.plot(X_time, target.flatten(), label="Reference Signal")
+
+    # Plot k-mer boundaries and annotations
+    cumulative_length = 0
+    for i, (kmer, reflen) in enumerate(zip(batch_dna_str, batch_reflen)):
+        # Vertical line at the start of the k-mer
+        plt.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
+        # Annotate the k-mer above the signal
+        midpoint = cumulative_length + reflen / 2
+        plt.text(midpoint, max(target.flatten()) * 1.05, kmer, ha="center", va="bottom", fontsize=5, rotation=90)
+        # Update cumulative length
+        cumulative_length += reflen
+
+    plt.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
+
+    # Add title for context
+    plt.title(f"Reference Signal with k-mers - Batch {batch_idx} - {full_sequence}", fontsize=12, pad=10)
+
+    # Adjust y-axis limits to accommodate annotations
+    plt.ylim(bottom=-10, top=max(target.flatten()) * 1.3)
+
     # Save plot as PNG file
-    out_file = os.path.join(out_dir, f"batch_{batch_idx}.png")
-    plt.savefig(out_file, dpi=100)
+    out_file_ref = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
+    plt.savefig(out_file_ref, dpi=200, bbox_inches="tight")
+
+    # Clear plot and close figure to release memory
+    plt.clf()
+    plt.close()
+
+    # Plot 2: All Signals (Reference + Predicted)
+    fig2, ax2 = plt.subplots(figsize=(12, 6))
+    ax2.yaxis.set_minor_locator(AutoMinorLocator())
+    ax2.xaxis.set_minor_locator(AutoMinorLocator())
+
+    # Set labels and grid
+    plt.xlabel("Signal Points")
+    plt.ylabel("Current (pA)")
+    plt.grid(which="major", linestyle="solid")
+    plt.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
+
+    # Plot true and predicted signals
+    plt.plot(X_time, target.flatten(), label="Reference Signal")
+    plt.plot(X_time, batch_pred.flatten(), label="Predicted Signal (Noisy)")
+    plt.plot(X_time, batch_pred_idealamp.flatten(), label="Predicted Signal (Sampled Length)")
+    plt.plot(X_time, batch_pred_idealtime.flatten(), label="Predicted Signal (Reference Length)")
+
+    # Add legend with improved readability
+    plt.legend(loc="upper right", fontsize=10, frameon=True, edgecolor="black")
+
+    # Add title for context
+    plt.title(f"All Signals Prediction - Batch {batch_idx} - {full_sequence}", fontsize=12, pad=10)
+
+    plt.ylim(bottom=-10, top=max(target.flatten()) * 1.3)
+
+    # Save plot as PNG file
+    out_file_all = os.path.join(out_dir, f"batch_{batch_idx}_all_signals.png")
+    plt.savefig(out_file_all, dpi=200, bbox_inches="tight")
 
     # Clear plot and close figure to release memory
     plt.clf()
