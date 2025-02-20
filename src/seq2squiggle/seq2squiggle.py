@@ -133,12 +133,20 @@ def main():
          "If enabled, each read will be processed independently, which may improve memory efficiency "
          "for large datasets but increases processing time.",
 )
+@click.option(
+    "--rna",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Process and order the events.tsv file for RNA data.",
+)
 def preprocess(
     events_path,
     outdir,
     no_batches,
     chunksize,
     partition_by,
+    rna,
     seed,
     model,
     config,
@@ -152,6 +160,7 @@ def preprocess(
     """
     setup_logging(verbosity)
     logger.info("seq2squiggle version %s", str(__version__))
+    logger.info(f"Preprocessing events.tsv file in {'RNA' if rna else 'DNA'} mode.")
     set_seeds(seed)
     config = set_config(config)
     preprocess_run(
@@ -160,6 +169,7 @@ def preprocess(
         batches=no_batches,
         chunksize=chunksize,
         partition_by=partition_by,
+        rna=rna,
         config=config,
     )
     logger.info("Preprocessing done.")
