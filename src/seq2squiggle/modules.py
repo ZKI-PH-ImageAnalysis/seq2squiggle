@@ -400,7 +400,7 @@ class LengthRegulator(nn.Module):
         dwell_std=0.0,
         duration_sampling=True,
     ):
-        min_value = 3
+        min_value = 1
         if duration_sampling:
             duration_predictor_output, dist = self.duration_sampler(
                 emb_out.detach().clone()
@@ -428,9 +428,10 @@ class LengthRegulator(nn.Module):
 
         if target is not None:
             output, noise_std_prediction = self.LR(x, noise_std_prediction, target, max_length=max_length)
-        else:
+        else:         
             duration_prediction = duration_predictor_output.detach().clone()
             duration_prediction = torch.round(duration_prediction).int()
             output, noise_std_prediction = self.LR(x, noise_std_prediction, duration_prediction, max_length=max_length)
+
         return output, duration_predictor_output, dist, noise_std_prediction
 
