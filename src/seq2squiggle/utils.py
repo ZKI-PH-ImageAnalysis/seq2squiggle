@@ -520,7 +520,7 @@ def sample_reads_from_genome(
         If `save` is False, returns a tuple of a generator for the reads and the total length of reads.
     """
     logger.debug("Generating reads.")
-    if n == -1 and c == 1:
+    if n <= 0 and c <= 0:
         logger.error("You need to specify the coverage c or the number of reads n")
         raise ValueError("You need to specify the coverage c or the number of reads n")
 

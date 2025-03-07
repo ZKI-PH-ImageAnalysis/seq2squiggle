@@ -389,8 +389,6 @@ def inference_run(
     check_model(load_model, config)
 
     reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed, profile)
-    # TODO The total_l parameter seems to be incorrect (too long?)
-    # It seems to dependend on the sequence length but we have to divide across input seq size 
 
     # "gamma_cpu" not implemented for 'BFloat16'
     precision = "16-mixed" if torch.cuda.device_count() >= 1 else "32"
