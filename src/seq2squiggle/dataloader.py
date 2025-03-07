@@ -351,7 +351,6 @@ class IterableFastaDataSet(IterableDataset):
     def __iter__(self):
         return self.iterable
 
-
     def __len__(self):
         return self.length
 
