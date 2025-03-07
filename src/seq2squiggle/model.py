@@ -231,7 +231,7 @@ class seq2squiggle(pl.LightningModule):
             non_zero_mask = prediction != 0
 
             if self.noise_sampling:
-                noise_std = noise_std_prediction_ext.squeeze() * self.noise_std * self.config["scaling_max_value"]
+                noise_std = noise_std_prediction_ext.squeeze(-1) * self.noise_std * self.config["scaling_max_value"]
 
                 gen_noise = torch.normal(mean=0, std=noise_std)
 
