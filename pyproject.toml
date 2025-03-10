@@ -24,10 +24,9 @@ scikit-learn = "^1.4.0"
 matplotlib = "^3.9.0"
 pysam = "^0.22.0"
 prettytable = "^3.9.0"
-transformers = "^4.41.2"
+transformers = "^4.48.0"
 numba = "^0.59.0"
 pyslow5 = "^1.1.0"
-cryptography = "43.0.3"
 
 [tool.poetry.scripts]
 seq2squiggle = "seq2squiggle.seq2squiggle:main"
