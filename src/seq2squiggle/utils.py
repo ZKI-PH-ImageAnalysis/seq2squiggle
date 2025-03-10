@@ -525,7 +525,7 @@ def sample_reads_from_reference(
         If `save` is True, returns a tuple of the path to the saved reads FASTA file and the total length of reads.
         If `save` is False, returns a tuple of a generator for the reads and the total length of reads.
     """
-    logger.debug("Generating reads.")
+    logger.debug("Generating reads from the reference input file.")
     if n <= 0 and c <= 0:
         logger.error("You need to specify the coverage c or the number of reads n")
         raise ValueError("You need to specify the coverage c or the number of reads n")
@@ -539,9 +539,17 @@ def sample_reads_from_reference(
         )
 
     total_len = sum([len(seq) for seq in genome_seqs])
+    avg_genome_len = total_len / len(genome_seqs)
     seq_num = round(c * total_len / r)
     seq_num = n if n != -1 else seq_num
     logger.debug(f"Number of reads: {seq_num}")
+
+    if r > avg_genome_len and profile.startswith("dna"):
+        logger.warning(
+            f"Average reference sequence length ({avg_genome_len:.2f}) is smaller than the desired average read length ({r})."
+            " If the sampled read length is higher than the reference sequence length, they will be skipped."
+            " Consider reducing the desired average read length via -r."
+        )
 
     read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr, profile)
 
@@ -621,7 +629,7 @@ def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, save=Fal
     if read_input: # Read mode
         reads_generator = read_fasta(fasta, profile.startswith("rna"))
         return reads_generator, compute_totals(read_fasta(fasta, profile.startswith("rna")))[1]
-    else: # Genome mode
+    else: # Reference mode
         reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr, profile)
     
     return read_fasta(reads_fasta, profile.startswith("rna")) if save else (reads_fasta, total_l)
