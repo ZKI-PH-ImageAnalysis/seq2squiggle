@@ -350,8 +350,6 @@ def add_remainder(x, max_dna, k):
 def split_sequence(x, config):
     x = extract_kmers(x, config["seq_kmer"])
     x = add_remainder(x, config["max_dna_len"], config["seq_kmer"])
-    #if "_________" in x:
-    #    x = ["_________"] * len(x)
     x = one_hot_encode(x, config["seq_kmer"])
     breakpoints = regular_break_points(len(x), config["max_dna_len"], align="left")
     x_breaks = np.array([x[i:j] for (i, j) in breakpoints])
@@ -380,12 +378,13 @@ def sample_single_genome(genome, read_length, start_index):
     return genome[start_index:end_index]
 
 
-def read_check(read, read_length, read_i):
-    if len(read) != read_length:
-        logger.debug(
-            f"Sampled Read length of read {read_i} is shorter than real read length."
-        )
-        return False
+def read_check(read, read_length, read_i, profile):
+    if profile.startswith("dna"):
+        if len(read) != read_length:
+            logger.debug(
+                f"Sampled Read length of read {read_i} is shorter than real read length."
+            )
+            return False
     if len(read) < 100:
         logger.debug(f"Sampled Read length of read {read_i} is too short.")
         return False
@@ -414,7 +413,7 @@ def reverse_complement(f):
 
 
 def sampling(
-    num_seqs, genome_seqs, genome_lens, r, seed, total_len, distr, max_retries=20
+    num_seqs, genome_seqs, genome_lens, r, seed, total_len, distr, profile, max_retries=20
 ):
     """
     Sample reads from each single genome.
@@ -437,18 +436,24 @@ def sampling(
         while retries < max_retries:
             # Find the corresponding genome and its start index
             start_pos = random.randint(0, total_genome_len - 1)
+
             genome_index, start_index = get_genome_and_position(genome_lens, start_pos)
+
             genome = genome_seqs[genome_index]
 
             # Generate a unique seed for each read and retry combination
             unique_seed = seed + read_i * (max_retries + 1) + retries
             read_length = distr_funcs[distr](r, unique_seed, total_len)
 
-            read = sample_single_genome(genome, read_length, start_index)
-
-            read_strand = get_strand()
-
-            if read_check(read, read_length, read_i):
+           
+            if profile.startswith("dna"):
+                read = sample_single_genome(genome, read_length, start_index)
+                read_strand = get_strand()
+            elif profile.startswith("rna"):
+                read = genome  # For RNA we take the whole transcriptome for now
+                read_strand = "+"  # RNA is always in the + strand
+            
+            if read_check(read, read_length, read_i, profile):
                 if "N" in read:
                     read = N_to_ACTG(read)
 
@@ -475,7 +480,7 @@ def yield_reads(reads):
     return ((read, str(uuid4())) for i, read in enumerate(reads))
 
 
-def sample_reads_from_genome(
+def sample_reads_from_reference(
     genome_seqs: List[str],
     genome_lens: List[int],
     n: int,
@@ -485,7 +490,8 @@ def sample_reads_from_genome(
     fasta: str,
     seed: int,
     save: bool = False,
-    distr: str = "expon"
+    distr: str = "expon",
+    profile: str = "dna-r10-min"
 ) -> Tuple[Union[str, None], int]:
     """
     Sample reads from genome sequences based on the provided parameters.
@@ -537,7 +543,7 @@ def sample_reads_from_genome(
     seq_num = n if n != -1 else seq_num
     logger.debug(f"Number of reads: {seq_num}")
 
-    read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr)
+    read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr, profile)
 
     total_l = sum([round(len(read) / config["max_dna_len"]) for read in read_list])
 
@@ -550,54 +556,6 @@ def sample_reads_from_genome(
 
     return reads_fasta, total_l
 
-
-def sample_reads_from_transcriptome(
-    transcriptome_seqs: List[str],
-    transcriptome_lens: List[int],
-    n: int,
-    seed: int,
-    save: bool = False,
-    fasta: str = "output.fasta",
-) -> Tuple[Union[str, None], int]:
-    """
-    Sample full transcripts from the transcriptome sequences.
-
-    Parameters
-    ----------
-    transcriptome_seqs : List[str]
-        List of transcript sequences.
-    transcriptome_lens : List[int]
-        List of lengths of transcript sequences.
-    n : int
-        Number of transcripts to sample. If -1, use all available transcripts.
-    seed : int
-        Random seed for reproducibility.
-    save : bool, optional
-        If True, save the sampled transcripts to a FASTA file (default is False).
-    fasta : str, optional
-        Path to the FASTA file for saving (default is "output.fasta").
-
-    Returns
-    -------
-    Tuple[Union[str, None], int]
-        If `save` is True, returns the path to the saved FASTA file and the total length of sequences.
-        If `save` is False, returns a generator of sampled transcripts and the total length.
-    """
-    logger.debug("Sampling full transcripts from transcriptome.")
-    random.seed(seed)
-    
-    if n == -1 or n > len(transcriptome_seqs):
-        sampled_transcripts = transcriptome_seqs  # Use all transcripts if n is -1
-    else:
-        sampled_transcripts = random.sample(transcriptome_seqs, n)
-    
-    total_length = sum(len(seq) for seq in sampled_transcripts)
-    
-    if save:
-        reads_fasta = export_fasta(sampled_transcripts, fasta)
-        return reads_fasta, total_length
-    else:
-        return yield_reads(sampled_transcripts), total_length
 
 
 
@@ -663,11 +621,8 @@ def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, save=Fal
     if read_input: # Read mode
         reads_generator = read_fasta(fasta, profile.startswith("rna"))
         return reads_generator, compute_totals(read_fasta(fasta, profile.startswith("rna")))[1]
-    elif profile.startswith("rna"): # Transcriptome mode
-        reads_fasta, total_l = sample_reads_from_transcriptome(genome_seqs, genome_lens, n, seed, save, distr)
-        # reads_fasta, total_l = sample_reads_from_genome(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr)
     else: # Genome mode
-        reads_fasta, total_l = sample_reads_from_genome(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr)
+        reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr, profile)
     
     return read_fasta(reads_fasta, profile.startswith("rna")) if save else (reads_fasta, total_l)
 
