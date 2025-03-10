@@ -39,6 +39,8 @@ class seq2squiggle(pl.LightningModule):
         noise_sampling: bool = False,
         duration_sampling: bool = False,
         export_every_n_samples: int = 2000000,
+        min_noise: float = 0.5,
+        min_duration: int = 1,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -57,6 +59,8 @@ class seq2squiggle(pl.LightningModule):
         self.duration_sampling = duration_sampling
         self.export_every_n_samples = export_every_n_samples
         self.total_samples = 0
+        self.min_noise = min_noise
+        self.min_duration = min_duration
 
     def training_step(self, batch, batch_idx):
         data, targets, data_ls, targets_ls, noise_std, *args = batch
@@ -81,6 +85,7 @@ class seq2squiggle(pl.LightningModule):
             target=data_ls,
             noise_std_prediction=noise_std_prediction,
             max_length=self.config["max_signal_len"],
+            min_length=self.min_duration,
         )
 
         prediction = self.decoders(length_predict_out)
@@ -128,6 +133,7 @@ class seq2squiggle(pl.LightningModule):
             target=data_ls,
             noise_std_prediction=noise_std_prediction,
             max_length=self.config["max_signal_len"],
+            min_length=self.min_duration,
         )
 
         prediction = self.decoders(length_predict_out)
@@ -174,7 +180,7 @@ class seq2squiggle(pl.LightningModule):
             noise_std_prediction_ext = (
                 noise_std_prediction_ext * self.config["scaling_max_value"]
             )
-            noise_std_prediction_ext = torch.clamp(noise_std_prediction_ext, min=0.5)
+            noise_std_prediction_ext = torch.clamp(noise_std_prediction_ext, min=self.min_noise)             
             gen_noise = torch.normal(mean=0, std=noise_std_prediction_ext)
 
             non_zero_mask = prediction != 0
@@ -203,9 +209,6 @@ class seq2squiggle(pl.LightningModule):
         bs, seq_l = data.shape[:2]
         data = data.reshape(bs, seq_l, -1)
 
-        # TODO Implement mask here
-        #     
-
         enc_out, emb_out = self.encoders(data)
 
         noise_std_prediction = self.noise_sampler(emb_out)
@@ -220,6 +223,7 @@ class seq2squiggle(pl.LightningModule):
             dwell_mean=self.dwell_mean,
             dwell_std=self.dwell_std,
             duration_sampling=self.duration_sampling,
+            min_length=self.min_duration,
         )
 
         prediction = self.decoders(length_predict_out)
@@ -231,6 +235,8 @@ class seq2squiggle(pl.LightningModule):
             non_zero_mask = prediction != 0
 
             if self.noise_sampling:
+                noise_std_prediction_ext = torch.clamp(noise_std_prediction_ext, min=self.min_noise)
+
                 noise_std = noise_std_prediction_ext.squeeze(-1) * self.noise_std * self.config["scaling_max_value"]
 
                 gen_noise = torch.normal(mean=0, std=noise_std)

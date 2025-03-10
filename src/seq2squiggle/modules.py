@@ -399,15 +399,15 @@ class LengthRegulator(nn.Module):
         dwell_mean=9.0,
         dwell_std=0.0,
         duration_sampling=True,
+        min_length = 1,
     ):
-        min_value = 1
         if duration_sampling:
             duration_predictor_output, dist = self.duration_sampler(
                 emb_out.detach().clone()
             )
 
             duration_predictor_output = torch.clamp(
-                duration_predictor_output, min=min_value
+                duration_predictor_output, min=min_length
             )
         else:
             bs, seq, _ = emb_out.shape
@@ -423,7 +423,7 @@ class LengthRegulator(nn.Module):
                 # Ensure all values are positive by clipping to a minimum value
                 # a small positive value to ensure strictly positive values
                 duration_predictor_output = torch.clamp(
-                    duration_predictor_output, min=min_value
+                    duration_predictor_output, min=min_length
                 )
 
         if target is not None:

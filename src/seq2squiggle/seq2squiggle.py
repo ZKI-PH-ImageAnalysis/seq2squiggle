@@ -234,7 +234,7 @@ def conditional_option(f):
         type=bool,
         help="Enable or disable the noise sampler.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--duration-sampler",
@@ -242,7 +242,7 @@ def conditional_option(f):
         type=bool,
         help="Enable or disable the duration sampler.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--dwell-mean",
@@ -250,7 +250,7 @@ def conditional_option(f):
         type=float,
         help="Specify the mean dwell time (= number of signal points per k-mer). This will only be used if the duration sampler is deactivated.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--dwell-std",
@@ -258,7 +258,7 @@ def conditional_option(f):
         type=float,
         help="Specify the standard deviation of the dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--noise-std",
@@ -266,7 +266,7 @@ def conditional_option(f):
         type=float,
         help="Set the standard deviation for noise.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--distr",
@@ -274,7 +274,7 @@ def conditional_option(f):
         type=click.Choice(["expon", "beta", "gamma"]),
         help="Choose a distribution for read sampling.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--predict-batch-size",
@@ -282,7 +282,7 @@ def conditional_option(f):
         type=int,
         help="Specify the batch size for prediction.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--export-every-n-samples",
@@ -290,7 +290,7 @@ def conditional_option(f):
         type=int,
         help="Specify how often the predicted samples should be saved.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--sample-rate",
@@ -298,7 +298,7 @@ def conditional_option(f):
         type=int,
         help="Specify the sampling rate.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--bps",
@@ -306,7 +306,7 @@ def conditional_option(f):
         type=int,
         help="Specify the translocation speed.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--digitisation",
@@ -314,7 +314,7 @@ def conditional_option(f):
         type=int,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--range_val",
@@ -322,7 +322,7 @@ def conditional_option(f):
         type=float,
         help="Specify the range value.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--offset_mean",
@@ -330,7 +330,7 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--offset_std",
@@ -338,7 +338,7 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--median_before_mean",
@@ -346,7 +346,7 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--median_before_std",
@@ -354,7 +354,23 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
+    )(f)
+    f = click.option(
+        "--min_noise",
+        default=0.0,
+        type=float,
+        help="Specify the minimal stdv value for the noise sampler.",
+        show_default=True,
+        hidden=True
+    )(f)
+    f = click.option(
+        "--min_duration",
+        default=1,
+        type=int,
+        help="Specify the minimal event duration.",
+        show_default=True,
+        hidden=True
     )(f)
     return f
 
@@ -447,6 +463,8 @@ def predict(
     offset_std,
     median_before_mean,
     median_before_std,
+    min_noise,
+    min_duration,
     seed,
     model,
     config,
@@ -505,6 +523,8 @@ def predict(
         "offset_std": offset_std,
         "median_before_mean": median_before_mean,
         "median_before_std": median_before_std,
+        "min_noise": min_noise,
+        "min_duration": min_duration,
         "seed": seed,
         "model": model,
         "config": config,
@@ -548,6 +568,8 @@ def predict(
         offset_std=offset_std,
         median_before_mean=median_before_mean,
         median_before_std=median_before_std,
+        min_noise=min_noise,
+        min_duration=min_duration,
         seed=seed,
     )
     logger.info("Prediction done.")

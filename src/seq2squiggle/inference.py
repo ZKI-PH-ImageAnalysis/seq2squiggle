@@ -289,6 +289,8 @@ def inference_run(
     offset_std: float,
     median_before_mean: float,
     median_before_std: float,
+    min_noise: float,
+    min_duration: float,
     seed: int,
 ):
     """
@@ -384,6 +386,8 @@ def inference_run(
         noise_sampling=noise_sampling,
         duration_sampling=duration_sampling,
         export_every_n_samples=export_every_n_samples,
+        min_noise=min_noise,
+        min_duration=min_duration,
     )
 
     check_model(load_model, config)
