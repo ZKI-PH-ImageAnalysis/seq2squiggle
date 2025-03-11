@@ -130,6 +130,8 @@ seq2squiggle preprocess events_valid.tsv valid_dir --max-chunks -1 --config my_c
 seq2squiggle train train_dir valid_dir --config my_config.yml --model last.ckpt
 ```
 
+For a detailed explanation of the configuration parameters, see [CONFIG.md](CONFIG.md)
+
 ## Acknowledgement
 The model is based on [xcmyz's implementation of FastSpeech](https://github.com/xcmyz/FastSpeech). Some code snippets for preprocessing DNA-signal chunks have been taken from [bonito](https://github.com/nanoporetech/bonito). We also incorporated code snippets from [Casanovo](https://github.com/Noble-Lab/casanovo) for different functionalities, including downloading weights, logging, and the design of the main function. 
 Additionally, we used parameter profiles from squigulator for various chemistries to set digitisation, sample-rate, range, median_before, and other signal parameters. These profiles are detailed in [squigulator's documentation](https://hasindu2008.github.io/squigulator/docs/profile.html).
