@@ -214,7 +214,7 @@ class seq2squiggle(pl.LightningModule):
         noise_std_prediction = self.noise_sampler(emb_out)
         noise_std_prediction = noise_std_prediction[:, :, None]
 
-        length_predict_out, _, _, noise_std_prediction_ext = self.length_regulator(
+        length_predict_out, _, _, noise_std_prediction_ext, padding_mask = self.length_regulator(
             emb_out=emb_out,
             x=enc_out,
             target=None,
@@ -226,7 +226,8 @@ class seq2squiggle(pl.LightningModule):
             min_length=self.min_duration,
         )
 
-        prediction = self.decoders(length_predict_out)
+        prediction = self.decoders(length_predict_out, None)
+        # prediction = length_predict_out[:, :, 0]
 
         prediction = prediction * self.config["scaling_max_value"]
         prediction = prediction.squeeze(-1)

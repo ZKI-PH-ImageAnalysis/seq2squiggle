@@ -62,7 +62,7 @@ class Encoder(nn.Module):
             ]
         )
 
-    def forward(self, src_seq, return_attns=False):
+    def forward(self, src_seq, return_attns=False, mask=None):
 
         batch_size, max_len = src_seq.shape[0], src_seq.shape[1]
         enc_slf_attn_list = []
@@ -81,7 +81,7 @@ class Encoder(nn.Module):
 
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(
-                enc_output, mask=None, slf_attn_mask=None
+                enc_output, mask=mask
             )
             if return_attns:
                 enc_slf_attn_list += [enc_slf_attn]
@@ -130,13 +130,13 @@ class Decoder(nn.Module):
             ]
         )
 
-    def forward(self, enc_seq):
+    def forward(self, enc_seq, mask=None):
         batch_size, max_len = enc_seq.shape[0], enc_seq.shape[1]
 
         dec_output = enc_seq + self.position_enc[:enc_seq.shape[1]]
 
         for dec_layer in self.layer_stack_FFT:
-            dec_output, _ = dec_layer(dec_output, mask=None, slf_attn_mask=None)
+            dec_output, _ = dec_layer(dec_output, mask=mask)
         dec_output = self.out_linear(dec_output)
         dec_output = self.relu(dec_output)
         return dec_output
@@ -370,7 +370,7 @@ class LengthRegulator(nn.Module):
         # create alignment matrix
         cum_duration_reshaped = cum_duration.reshape(batch_size * input_max_seq_len)
         M = get_padding_mask(cum_duration_reshaped,output_max_seq_len).reshape(
-            batch_size, input_max_seq_len,output_max_seq_len).float() 
+            batch_size, input_max_seq_len, output_max_seq_len).float() 
         # adjust the matrix so that it captures the differences between cumulative durations
         M = torch.diff(M, dim=1, prepend=torch.zeros_like(M[:, :1]))
         # matrix multip
@@ -380,11 +380,16 @@ class LengthRegulator(nn.Module):
             x_noise = torch.bmm(M.permute(0, 2, 1), x_noise)
 
         # pad to max length
+        padding_mask = None
         if max_length:
+            original_length = output.size(1)
             output = F.pad(output, (0, 0, 0, max_length - output.size(1), 0, 0))
             if x_noise is not None:
                 x_noise = F.pad(x_noise, (0, 0, 0, max_length - x_noise.size(1), 0, 0))
-        return output, x_noise
+            # padding_mask = torch.zeros((batch_size, max_length), dtype=torch.bool, device=output.device)
+            # padding_mask[:, original_length:] = 1  # Mark padded values
+
+        return output, x_noise, padding_mask
 
 
 
@@ -427,11 +432,11 @@ class LengthRegulator(nn.Module):
                 )
 
         if target is not None:
-            output, noise_std_prediction = self.LR(x, noise_std_prediction, target, max_length=max_length)
+            output, noise_std_prediction, padding_mask = self.LR(x, noise_std_prediction, target, max_length=max_length)
         else:         
             duration_prediction = duration_predictor_output.detach().clone()
             duration_prediction = torch.round(duration_prediction).int()
-            output, noise_std_prediction = self.LR(x, noise_std_prediction, duration_prediction, max_length=max_length)
+            output, noise_std_prediction, padding_mask = self.LR(x, noise_std_prediction, duration_prediction, max_length=max_length)
 
-        return output, duration_predictor_output, dist, noise_std_prediction
+        return output, duration_predictor_output, dist, noise_std_prediction, padding_mask
 
