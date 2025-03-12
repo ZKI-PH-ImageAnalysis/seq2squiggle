@@ -111,22 +111,80 @@ seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --
 ```
 
 ## Train a new model
-`seq2squiggle` uses the uncalled4's align output (events.tsv) as training data. 
 
-Run the following commands to generate the data with [uncalled4](https://github.com/skovaka/uncalled4):
-```
-uncalled4 align REF_FASTA SLOW5 --bam-in INPUT_BAM --eventalign-out OUTPUT_TSV --eventalign-flags print-read-names,signal-index,samples --pore-model dna_r10.4.1_400bps_9mer --flowcell FLO-MIN114 --kit SQK-LSK114
+`seq2squiggle` can be trained using segmented sequence and signal data obtained from a signal-to-reference alignment. These alignments can be generated using [uncalled4](https://github.com/skovaka/uncalled4) or [f5c](https://github.com/hasindu2008/f5c), which produce an eventalign table mapping raw signals to their corresponding reference sequences.
+
+### 1. Generate training data with `uncalled4` or `f5c`  
+You need event-level signal alignments as training data. These can be generated using either `uncalled4` or `f5c`.  
+
+#### Using [uncalled4](https://github.com/skovaka/uncalled4) 
+Run the following command to align reads and extract event-level signals:  
+
+```bash
+uncalled4 align input.ref input.slow5 \
+    --bam-in input.bam \
+    --eventalign-out events.tsv \
+    --eventalign-flags print-read-names,signal-index,samples \
+    --pore-model dna_r10.4.1_400bps_9mer \
+    --flowcell FLO-MIN114 \
+    --kit SQK-LSK114  
 ```
 
-Additionally, we use a small script to standardize the event_noise column:
-```
-./src/seq2squiggle/standardize-events.py INPUT_TSV OUTPUT_TSV
+#### Using [f5c](https://github.com/hasindu2008/f5c)
+Alternatively, you can use f5c to perform the alignment:
+
+```bash
+f5c eventalign \
+    -r input.fastq \
+    -b input.bam \
+    -g input.ref \
+    --slow5 input.slow5 \
+    -o events.tsv \
+    --samples \
+    --signal-index \
+    --print-read-names \
+    --collapse-events \
+    --pore r10
 ```
 
-To preprocess and train a model from scratch:
+### 2. Filter and transform into pA values (optional)
+
+Since `uncalled4` version 4.1.0, it no longer outputs scaled pA values directly. Instead, it outputs the normalized pore model values, which have a mean of 0 and a standard deviation of 1. `seq2squiggle` requires the signals to be in pA, so they must be converted back. 
+
+To denormalize signals, you first need to compute the average mean and average standard deviation of the pA values from your data. This can be done using [sigtk](https://github.com/hasindu2008/sigtk):
+
+```bash
+sigtk pa -n input.slow5 | \
+    cut -f3 | \
+    sed 's/,/\n/g' | \  
+    datamash mean 1 sstdev 1 | \
+    awk '{print "Mean pa_mean:", $1, "Mean pa_std:", $2}' > sigtk.txt
 ```
-seq2squiggle preprocess events.tsv train_dir --max-chunks -1 --config my_config.yml
-seq2squiggle preprocess events_valid.tsv valid_dir --max-chunks -1 --config my_config.yml
+
+The sigtk.txt will look like this
+```
+Mean pa_mean: 80.646167196571
+Mean pa_std: 17.826207455846
+```
+
+Once you have the sigtk.txt file, you can run the `standardize-events.py` script to denormalize the signal values:
+```bash
+./src/seq2squiggle/standardize-events.py events.tsv events_norm.tsv --sigtk sigtk.txt
+```
+
+### 3. Preprocess the event table to .npy chunks
+Before training, the eventalign table needs to be preprocessed into .npy chunks. It is recommended to first split the data into training and validation sets. This can be done based on chromosome regions (e.g., using chromosome 1 for training and chromosome 21 for validation) or by applying a random split with a specified fraction.
+
+Once the data is split, preprocess each subset:
+```bash
+seq2squiggle preprocess events_norm_train.tsv train_dir --max-chunks -1 --config my_config.yml
+seq2squiggle preprocess events_norm_valid.tsv valid_dir --max-chunks -1 --config my_config.yml
+```
+
+
+### 4. Train
+Once preprocessing is complete, you can start training:
+```bash
 seq2squiggle train train_dir valid_dir --config my_config.yml --model last.ckpt
 ```
 
