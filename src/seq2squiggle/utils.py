@@ -746,35 +746,28 @@ def generate_validation_plots(
     bs=12,
     devices=0,
 ):
-    # Adjust batch size if it exceeds the number of targets
     bs = min(bs, targets.shape[0])
-
-    # Select a subset of data for plotting
+    # Select subset for plotting
     targets = targets[:bs]
     prediction = prediction[:bs]
     prediction_idealamp = prediction_idealamp[:bs]
     prediction_idealtime = prediction_idealtime[:bs]
     data = data[:bs]
     data_ls = data_ls[:bs]
-    # Lists to store image paths for logging
+    
     reference_image_paths = []
     all_signals_image_paths = []
-
-    for batch_idx, (
-        batch_pred,
-        batch_pred_idealamp,
-        batch_pred_idealtime,
-        batch_target,
-        batch_dna,
-        batch_reflen,
-    ) in enumerate(
+    
+    for batch_idx, (batch_pred, batch_pred_idealamp, batch_pred_idealtime,
+                    batch_target, batch_dna, batch_reflen) in enumerate(
         zip(prediction, prediction_idealamp, prediction_idealtime, targets, data, data_ls)
     ):
-        seq_len, _, = batch_dna.shape
+        seq_len = batch_dna.shape[0]
+        # Reshape the DNA tensor to (seq_len, seq_kmer, allowed_chars)
         batch_dna = batch_dna.reshape(seq_len, config["seq_kmer"], len(config["allowed_chars"]))
         batch_dna_str = decode_one_hot(batch_dna.cpu().data.numpy())
         batch_reflen = batch_reflen.cpu().data.numpy()
-
+        
         plot_signal(
             batch_pred,
             batch_pred_idealamp,
@@ -787,16 +780,13 @@ def generate_validation_plots(
             batch_idx,
             log_dir=log_dir,
         )
-        # Collect saved image paths
-        out_dir = os.path.join(log_dir, f"epoch_{self.current_epoch}/")
+        out_dir = os.path.join(log_dir, f"epoch_{self.current_epoch}")
         reference_image_file = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
         all_signals_image_file = os.path.join(out_dir, f"batch_{batch_idx}_all_signals.png")
-
         if os.path.exists(reference_image_file):
             reference_image_paths.append(reference_image_file)
         if os.path.exists(all_signals_image_file):
             all_signals_image_paths.append(all_signals_image_file)
-    # TODO Log with wandb
 
 def reconstruct_full_sequence(kmers):
         """
@@ -817,6 +807,17 @@ def reconstruct_full_sequence(kmers):
             full_sequence += kmer[-1]  # Append the last character of each subsequent k-mer
         return full_sequence
 
+def setup_plot(figsize=(12, 6), xlabel="Signal Points", ylabel="Current (pA)"):
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.grid(which="major", linestyle="solid")
+    ax.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    return fig, ax
+
+
 def plot_signal(
     batch_pred,
     batch_pred_idealamp,
@@ -831,83 +832,52 @@ def plot_signal(
     dec_output_FR=None,
 ):  
     
+    # Reconstruct full sequence from k-mers
     full_sequence = reconstruct_full_sequence(batch_dna_str)
-
+    # Calculate the actual signal length (without padding)
+    actual_length = int(sum(batch_reflen))
+    
     # Create output directory if it doesn't exist
-    out_dir = os.path.join(log_dir, f"epoch_{epoch}/")
+    out_dir = os.path.join(log_dir, f"epoch_{epoch}")
     os.makedirs(out_dir, exist_ok=True)
-
-    # Plot 1: Reference Signal with k-mers
-    fig1, ax1 = plt.subplots(figsize=(12, 6))
-    ax1.yaxis.set_minor_locator(AutoMinorLocator())
-    ax1.xaxis.set_minor_locator(AutoMinorLocator())
-
-    # Set labels and grid
-    plt.xlabel("Signal Points")
-    plt.ylabel("Current (pA)")
-    plt.grid(which="major", linestyle="solid")
-    plt.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
-
-    # Plot reference signal
-    X_time = range(0, len(target.flatten()))
-    plt.plot(X_time, target.flatten(), label="Reference Signal")
-
-    # Plot k-mer boundaries and annotations
+    
+    # Plot 1: Reference Signal with k-mer boundaries
+    fig, ax = setup_plot(figsize=(12, 6))
+    x_axis = range(actual_length)
+    target_signal = target.flatten()[:actual_length]
+    ax.plot(x_axis, target_signal, label="Reference Signal")
+    ax.plot(x_axis, batch_pred_idealtime.flatten()[:actual_length], 
+            label="Simulated Signal (no added noise + no sampled duration)", color="C3")
+    
     cumulative_length = 0
-    for i, (kmer, reflen) in enumerate(zip(batch_dna_str, batch_reflen)):
-        # Vertical line at the start of the k-mer
-        plt.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
-        # Annotate the k-mer above the signal
+    for kmer, reflen in zip(batch_dna_str, batch_reflen):
+        ax.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
         midpoint = cumulative_length + reflen / 2
-        plt.text(midpoint, max(target.flatten()) * 1.05, kmer, ha="center", va="bottom", fontsize=5, rotation=90)
-        # Update cumulative length
+        ax.text(midpoint, target_signal.max() * 0.95, kmer, ha="center", va="bottom",
+                fontsize=4, rotation=90)
         cumulative_length += reflen
-
-    plt.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
-
-    # Add title for context
-    plt.title(f"Reference Signal with k-mers - Batch {batch_idx} - {full_sequence}", fontsize=12, pad=10)
-
-    # Adjust y-axis limits to accommodate annotations
-    plt.ylim(bottom=-10, top=max(target.flatten()) * 1.3)
-
-    # Save plot as PNG file
-    out_file_ref = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
-    plt.savefig(out_file_ref, dpi=200, bbox_inches="tight")
-
-    # Clear plot and close figure to release memory
-    plt.clf()
-    plt.close()
-
-    # Plot 2: All Signals (Reference + Predicted)
-    fig2, ax2 = plt.subplots(figsize=(12, 6))
-    ax2.yaxis.set_minor_locator(AutoMinorLocator())
-    ax2.xaxis.set_minor_locator(AutoMinorLocator())
-
-    # Set labels and grid
-    plt.xlabel("Signal Points")
-    plt.ylabel("Current (pA)")
-    plt.grid(which="major", linestyle="solid")
-    plt.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
-
-    # Plot true and predicted signals
-    plt.plot(X_time, target.flatten(), label="Reference Signal")
-    plt.plot(X_time, batch_pred.flatten(), label="Predicted Signal (Noisy)")
-    plt.plot(X_time, batch_pred_idealamp.flatten(), label="Predicted Signal (Sampled Length)")
-    plt.plot(X_time, batch_pred_idealtime.flatten(), label="Predicted Signal (Reference Length)")
-
-    # Add legend with improved readability
-    plt.legend(loc="upper right", fontsize=10, frameon=True, edgecolor="black")
-
-    # Add title for context
-    plt.title(f"All Signals Prediction - Batch {batch_idx} - {full_sequence}", fontsize=12, pad=10)
-
-    plt.ylim(bottom=-10, top=max(target.flatten()) * 1.3)
-
-    # Save plot as PNG file
-    out_file_all = os.path.join(out_dir, f"batch_{batch_idx}_all_signals.png")
-    plt.savefig(out_file_all, dpi=200, bbox_inches="tight")
-
-    # Clear plot and close figure to release memory
-    plt.clf()
-    plt.close()
+    ax.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
+    ax.legend(loc="upper right", fontsize=10, frameon=True, edgecolor="black")
+    ax.set_title(f"Reference Signal with k-mers - Batch {batch_idx} - {full_sequence}",
+                 fontsize=12, pad=10)
+    ax.set_ylim(bottom=-10, top=target_signal.max() * 1.3)
+    ref_file = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
+    fig.savefig(ref_file, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    
+    # Plot 2: All Signals (Reference and Predictions)
+    fig, ax = setup_plot(figsize=(12, 6))
+    full_x = range(len(target.flatten()))
+    target_full = target.flatten()
+    ax.plot(full_x, target_full, label="Reference Signal")
+    ax.plot(full_x, batch_pred.flatten(), label="Simulated Signal")
+    ax.plot(full_x, batch_pred_idealamp.flatten(), label="Simulated Signal (no added noise)")
+    ax.plot(full_x, batch_pred_idealtime.flatten(), 
+            label="Simulated Signal (no added noise + no sampled duration)")
+    ax.legend(loc="upper right", fontsize=10, frameon=True, edgecolor="black")
+    ax.set_title(f"All Signals Prediction - Batch {batch_idx} - {full_sequence}",
+                 fontsize=12, pad=10)
+    ax.set_ylim(bottom=-10, top=target_full.max() * 1.3)
+    all_file = os.path.join(out_dir, f"batch_{batch_idx}_all_signals.png")
+    fig.savefig(all_file, dpi=200, bbox_inches="tight")
+    plt.close(fig)
