@@ -124,11 +124,13 @@ class BLOW5Writer:
 
             records[record["read_id"]] = record
             auxs[record["read_id"]] = aux
+        
 
         num_processes = multiprocessing.cpu_count()
-        ret = s5.write_record_batch(
-            records, threads=num_processes, batchsize=500, aux=auxs
-        )
+        if records:
+            ret = s5.write_record_batch(
+                records, threads=num_processes, batchsize=500, aux=auxs
+            )
         s5.close()
 
 
