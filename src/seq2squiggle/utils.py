@@ -349,6 +349,9 @@ def add_remainder(x, max_dna, k):
 
 def split_sequence(x, config):
     x = extract_kmers(x, config["seq_kmer"])
+    #print(x, len(x))
+    x = ["_______"]*len(x)
+    #print(x, len(x))
     x = add_remainder(x, config["max_dna_len"], config["seq_kmer"])
     x = one_hot_encode(x, config["seq_kmer"])
     breakpoints = regular_break_points(len(x), config["max_dna_len"], align="left")

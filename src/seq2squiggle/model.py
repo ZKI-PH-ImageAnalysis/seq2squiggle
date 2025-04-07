@@ -195,14 +195,37 @@ class seq2squiggle(pl.LightningModule):
     def predict_step(self, batch):
         read_id, data, *args = batch
         bs, seq_l = data.shape[:2]
+    
+        
+        underscore_pattern = torch.tensor([1, 0, 0, 0, 0], device=data.device)
+        print(underscore_pattern)
+        
+        underscore_mask = (data == underscore_pattern)  # shape: [bs, seq_l, 9]
+        print(underscore_mask)
+        print(data)
+        # TODO check
+        exit()
+        padding_mask = underscore_mask.all(dim=-1)  # shape: [bs, seq_l]; True where _
+        # Invert it to get a usable mask for decoding (1 for real data, 0 for padding)
+        decoder_mask = (~padding_mask).float()
+        print(decoder_mask.shape)
+        print(decoder_mask)
+        print(decoder_mask[0])
+        exit()
+        if decoder_mask.sum() < bs * seq_l:
+            print("Detected padding in input:")
+            print(decoder_mask)
+        # print(underscore_mask)
+
         data = data.reshape(bs, seq_l, -1)
+        
 
         enc_out, emb_out = self.encoders(data)
 
         noise_std_prediction = self.noise_sampler(emb_out)
         noise_std_prediction = noise_std_prediction[:, :, None]
 
-        length_predict_out, _, _, noise_std_prediction_ext, padding_mask = self.length_regulator(
+        length_predict_out, _, _, noise_std_prediction_ext, _ = self.length_regulator(
             emb_out=emb_out,
             x=enc_out,
             target=None,
