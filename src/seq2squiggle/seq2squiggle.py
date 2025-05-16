@@ -406,7 +406,7 @@ def conditional_option(f):
     type=int,
     default=10000,
     show_default=True,
-    help="Specify the desired average read length.",
+    help="Specify the desired average read length. If set to 0 or -1, the entire transcript or genome will be simulated without sampling",
 )
 @click.option(
     "-c",

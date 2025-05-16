@@ -443,15 +443,23 @@ def sampling(
 
             # Generate a unique seed for each read and retry combination
             unique_seed = seed + read_i * (max_retries + 1) + retries
-            read_length = distr_funcs[distr](r, unique_seed, total_len)
 
+            # Determine the read length
+            if r > 0:
+                read_length = distr_funcs[distr](r, unique_seed, total_len)
+            else:
+                read_length = len(genome)
            
+            # Sample read based on profile type
             if profile.startswith("dna"):
                 read = sample_single_genome(genome, read_length, start_index)
                 read_strand = get_strand()
             elif profile.startswith("rna"):
-                read = genome  # For RNA we take the whole transcriptome for now
-                read_strand = "+"  # RNA is always in the + strand
+                if r > 0:
+                    read = sample_single_genome(genome, read_length, start_index)
+                else:
+                    read = genome  # Take the full transcript
+                read_strand = "+"  # RNA is always on the + strand
             
             if read_check(read, read_length, read_i, profile):
                 if "N" in read:
