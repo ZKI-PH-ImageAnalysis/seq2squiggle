@@ -176,6 +176,8 @@ class seq2squiggle(pl.LightningModule):
             gen_noise = torch.normal(mean=0, std=noise_std_ext)
             non_zero = pred_scaled != 0
             pred_scaled[non_zero] += gen_noise[non_zero]
+            ideal_scaled[non_zero] += gen_noise[non_zero]
+            time_scaled[non_zero] += gen_noise[non_zero]
 
             if self.save_valid_plots:
                 generate_validation_plots(

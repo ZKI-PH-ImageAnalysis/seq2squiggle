@@ -814,8 +814,8 @@ def setup_plot(figsize=(12, 6), xlabel="Signal Points", ylabel="Current (pA)"):
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.grid(which="major", linestyle="solid")
-    ax.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
+    #ax.grid(which="major", linestyle="solid")
+    #ax.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     ax.xaxis.set_minor_locator(AutoMinorLocator())
     return fig, ax
@@ -845,12 +845,12 @@ def plot_signal(
     os.makedirs(out_dir, exist_ok=True)
     
     # Plot 1: Reference Signal with k-mer boundaries
-    fig, ax = setup_plot(figsize=(12, 6))
+    fig, ax = setup_plot(figsize=(13, 4))
     x_axis = range(actual_length)
     target_signal = target.flatten()[:actual_length]
-    ax.plot(x_axis, target_signal, label="Reference Signal")
+    ax.plot(x_axis, target_signal, label="Reference Signal", color="grey")
     ax.plot(x_axis, batch_pred_idealtime.flatten()[:actual_length], 
-            label="Simulated Signal (no added noise + no sampled duration)", color="C3")
+            label="Simulated Signal", color="C0")
     
     cumulative_length = 0
     for kmer, reflen in zip(batch_dna_str, batch_reflen):
@@ -863,7 +863,7 @@ def plot_signal(
     ax.legend(loc="upper right", fontsize=10, frameon=True, edgecolor="black")
     ax.set_title(f"Reference Signal with k-mers - Batch {batch_idx} - {full_sequence}",
                  fontsize=12, pad=10)
-    ax.set_ylim(bottom=-10, top=target_signal.max() * 1.3)
+    ax.set_ylim(bottom=target_signal.min()-10, top=target_signal.max() * 1.3)
     ref_file = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
     fig.savefig(ref_file, dpi=200, bbox_inches="tight")
     plt.close(fig)
