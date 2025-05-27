@@ -262,7 +262,7 @@ def conditional_option(f):
     )(f)
     f = click.option(
         "--noise-std",
-        default=1.0,
+        default=2.0,
         type=float,
         help="Set the standard deviation for noise.",
         show_default=True,
@@ -366,7 +366,7 @@ def conditional_option(f):
     )(f)
     f = click.option(
         "--min_duration",
-        default=1,
+        default=3,
         type=int,
         help="Specify the minimal event duration.",
         show_default=True,
@@ -404,7 +404,7 @@ def conditional_option(f):
     "-r",
     "--read-length",
     type=int,
-    default=10000,
+    default=1000,
     show_default=True,
     help="Specify the desired average read length. If set to 0 or -1, the entire transcript or genome will be simulated without sampling",
 )
