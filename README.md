@@ -45,70 +45,80 @@ pip install .
 If you do not provide a model file, `seq2squiggle` will automatically attempt to download a compatible model file to ensure predictions can be made. 
 
 ## Predict signals from FASTA file
-`seq2squiggle` simulates artificial signals based on an input FASTX file. By default, the output is in SLOW5/BLOW5 format. Exporting to the new POD5 format is also supported, though BLOW5 is preferred for its stability. You will need to specify the path to the model through the configuration file.
+`seq2squiggle` simulates artificial signals based on an input FASTX file. It supports two general modes depending on the input and intended simulation style:
 
-For optimal performance, running `seq2squiggle` on a GPU is recommended, especially to speed up inference. However, the tool also works on CPU-only systems, though at a slower inference speed.
+### Reference mode 
 
-### Examples 
+Input: FASTA file (genome or transcriptome)
+- First generates **synthetic reads** from the reference sequence.
+- Each generated read is then simulated as a signal.
+- Use `-n`, `-c`, or `-r` to control number, coverage, or average read length.
 
-Generate 10,000 reads from a fasta file:
-```
+Example:
+
+```bash
+# Generate 10,000 reads & signals from a fasta reference file
 seq2squiggle predict example.fasta -o example.blow5 -n 10000
-```
-Generate 10,000 reads using R9.4.1 chemistry on a MinION:
-```
+# Generate 10,000 reads & signals using R9.4.1 chemistry
 seq2squiggle predict example.fasta -o example.blow5 -n 10000 --profile dna_r9_min
-```
-Generate reads with a coverage of 30:
-```
-seq2squiggle predict example.fasta -o example.blow5 -c 30
-```
-Generate reads with a coverage of 30 and an average read length of 5,000:
-```
+# Export as pod5
+seq2squiggle predict example.fastq -o example.pod5 -n 10000
+# Generate reads with a coverage of 30 and an average read length of 5,000:
 seq2squiggle predict example.fasta -o example.blow5 -c 30 -r 5000
 ```
-Simulate signals from basecalled reads (each single read will be simulated):
-```
+
+### Read mode (--read-input)
+
+Input: FASTA/FASTQ file of basecalled reads
+- Simulates signals directly from input reads (no additional fragmentation).
+
+There are two behaviors within Read Mode:
+#### a) One signal per input read (default)
+```bash
 seq2squiggle predict example.fastq -o example.blow5 --read-input
 ```
-Export as pod5:
+This generates exactly one signal per input read (1:1 mapping).
+
+#### b) Multiple signals based on input reads (-n)
+```bash
+seq2squiggle predict reads.fastq -o out.blow5 --read-input -n 1000
 ```
-seq2squiggle predict example.fastq -o example.pod5 --read-input
-```
+This samples n total signals by selecting input reads without splitting them.
+It's not simulating n signals per read, but rather simulating n signals across the input reads.
+
+This hybrid approach is useful when:
+- You want to simulate larger datasets from real reads without generating synthetic sequences.
+- You want to preserve real read characteristics while exploring noise or signal variability.
+
+### Notes
+
+By default, the output is in SLOW5/BLOW5 format. Exporting to the new POD5 format is also supported, though BLOW5 is preferred for its stability. You will need to specify the path to the model through the configuration file.
+
+For optimal performance, running `seq2squiggle` on a GPU is recommended, especially to speed up inference for a high number of samples. However, the tool also works on CPU-only systems, though at a slower inference speed.
+
 
 ## Noise options
 `seq2squiggle` provides flexible options for generating signal data with various noise configurations. By default, it uses its duration sampler and noise sampler modules to predict event durations and amplitude noise levels specific to each input k-mer. Alternatively, you can deactivate these modules (`--noise-sampler False --duration-sampler False`) and use static distributions to sample event durations and amplitude noise. The static distributions can be configured using the options `--noise-std`, `--dwell-std`, and `--dwell-mean`.
 
 ### Examples using different noise options
 
-Default configuration (noise sampler and duration sampler enabled): 
-```
+```bash
+# Default configuration (noise sampler and duration sampler enabled)
 seq2squiggle predict example.fasta -o example.blow5
-```
-Using the noise sampler with increased noise standard deviation and the duration sampler:
-```
+# Using the noise sampler with increased noise standard deviation and the duration sampler
 seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.5
-```
-Using a static normal distribution for the amplitude noise and the duration sampler:
-```
+# Using a static normal distribution for the amplitude noise and the duration sampler:
 seq2squiggle predict example.fasta -o example.blow5 --noise-std 1.0 --noise-sampling False
-```
-Using the noise sampler and a static normal distribution for event durations:
-```
+# Using the noise sampler and a static normal distribution for event durations
 seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-std 4.0
-```
-Using the noise sampler with ideal event lengths (each k-mer event will have a length of 10):
-```
+# Using the noise sampler with ideal event lengths (each k-mer event will have a length of 10):
 seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0
-```
-Using a static normal distribution for amplitude noise and ideal event lengths:
-```
+# Using a static normal distribution for amplitude noise and ideal event lengths:
 seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0 --noise-sampling False --noise-std 1.0
+# Generating reads with no amplitude noise and ideal event lengths:
+seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0 --noise-sampling False --noise-std 0.0 
 ```
-Generating reads with no amplitude noise and ideal event lengths:
-```
-seq2squiggle predict example.fasta -o example.blow5 --duration-sampling False --dwell-mean 10.0 --dwell-std 0.0 --noise-sampling False --noise-std 0.0
-```
+
 
 ## Train a new model
 

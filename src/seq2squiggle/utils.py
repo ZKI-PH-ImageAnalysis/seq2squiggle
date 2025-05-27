@@ -20,7 +20,7 @@ import psutil
 import multiprocessing
 from typing import List, Generator, Tuple, Union
 from uuid import uuid4
-import wandb
+from collections import Counter
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -370,12 +370,12 @@ def get_genome_and_position(genome_lengths, random_position):
             return genome_index, position_within_genome
 
 
-def sample_single_genome(genome, read_length, start_index):
+def sample_single_ref(ref, read_length, start_index):
     """
     Sample a read of specified length from a single genome.
     """
     end_index = start_index + read_length
-    return genome[start_index:end_index]
+    return ref[start_index:end_index]
 
 
 def read_check(read, read_length, read_i, profile):
@@ -451,14 +451,10 @@ def sampling(
                 read_length = len(genome)
            
             # Sample read based on profile type
+            read = sample_single_ref(genome, read_length, start_index)
             if profile.startswith("dna"):
-                read = sample_single_genome(genome, read_length, start_index)
                 read_strand = get_strand()
             elif profile.startswith("rna"):
-                if r > 0:
-                    read = sample_single_genome(genome, read_length, start_index)
-                else:
-                    read = genome  # Take the full transcript
                 read_strand = "+"  # RNA is always on the + strand
             
             if read_check(read, read_length, read_i, profile):
@@ -546,6 +542,10 @@ def sample_reads_from_reference(
             "You can only either specify the coverage c or the number of reads, but not both"
         )
 
+    if r <= 0:
+        logger.error("You need to specify an average read length r for sampling from the reads from the reference sequence.")
+        raise ValueError("You need to specify the read length r")
+
     total_len = sum([len(seq) for seq in genome_seqs])
     avg_genome_len = total_len / len(genome_seqs)
     seq_num = round(c * total_len / r)
@@ -630,17 +630,34 @@ def preprocess_genome(fasta: str):
 
 
 def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, save=False):
-    logger.info(f"{'Read' if read_input else 'Transcriptome' if profile.startswith('rna') else 'Genome'} mode.")
-
-    genome_seqs, genome_lens = preprocess_genome(fasta) if not read_input or profile.startswith("rna") else (None, None)
+    logger.info(f"{'Read' if read_input else 'Reference'} mode.")
+    is_rna = profile.startswith("rna")
 
     if read_input: # Read mode
-        reads_generator = read_fasta(fasta, profile.startswith("rna"))
-        return reads_generator, compute_totals(read_fasta(fasta, profile.startswith("rna")))[1]
+        # If n is -1, each read will be simulated exactly once.
+        if n <= 0:
+            reads_generator = read_fasta(fasta, is_rna)
+            total_reads = compute_totals(read_fasta(fasta, is_rna))[1]
+            return reads_generator, total_reads
+        # Otherwise, we sample n reads
+
+        # Store all reads 
+        all_reads = list(read_fasta(fasta, is_rna))
+
+        rng = random.Random(seed)
+        sampled = [rng.choice(all_reads) for _ in range(n)]
+
+        def generator() -> Generator[Tuple[str, str], None, None]:
+            for seq, _ in sampled:
+                yield seq, str(uuid4())
+
+        return generator(), n
+        
     else: # Reference mode
+        genome_seqs, genome_lens = preprocess_genome(fasta)
         reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr, profile)
     
-    return read_fasta(reads_fasta, profile.startswith("rna")) if save else (reads_fasta, total_l)
+    return read_fasta(reads_fasta, is_rna) if save else (reads_fasta, total_l)
 
 
 def count_parameters(model):
