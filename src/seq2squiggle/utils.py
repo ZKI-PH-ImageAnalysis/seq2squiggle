@@ -715,7 +715,14 @@ def set_seeds(seed):
     Arguments:
     seed - int seed value
     """
-    logger.info(f"Setting seeds using random seed {seed}")
+
+    # If seed is 0 generate a new random seed.
+    if not seed:
+        # Draw 4 bytes from the OS’s CSPRNG and convert to an int in [0, 2**32-1].
+        seed = int.from_bytes(os.urandom(4), byteorder="big", signed=False)
+        logger.info(f"No seed provided. Generated random seed: {seed}")
+
+    logger.info(f"Setting all random seeds to {seed}")
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
     torch.manual_seed(seed)

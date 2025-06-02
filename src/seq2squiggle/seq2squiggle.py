@@ -53,7 +53,7 @@ class _SharedParams(click.RichCommand):
                 Set the seed value for reproducibility
                 """,
                 type=int,
-                default=385,
+                default=0,
             ),
             click.Option(
                 ("-m", "--model"),
