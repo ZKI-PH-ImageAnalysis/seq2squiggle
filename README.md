@@ -58,7 +58,7 @@ If you do not provide a model file, `seq2squiggle` will automatically attempt to
 - Synthetic reads are sampled from the reference sequence.
 - Each read is used to simulate a raw signal.
 - Use `-n`, `-c`, or `-r` to control number, coverage, or average read length.
-- Use `--distr` to specify the read length distribution .
+- Use `--distr` to specify the read length distribution.
 
 Example:
 
@@ -115,7 +115,7 @@ For optimal performance, running `seq2squiggle` on a GPU is recommended, especia
 ## Noise options
 Signal generation can be customized with:
 - **Noise Sampler**: predicts per-k-mer signal amplitude variation
-- **Duration Sampler**: predicts per-k-mer dwell times (event lengths)
+- **Duration Sampler**: predicts per-k-mer dwell time (event length) variation
 
 You can disable either or both to use static distributions instead.
 
