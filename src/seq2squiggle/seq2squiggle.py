@@ -53,7 +53,7 @@ class _SharedParams(click.RichCommand):
                 Set the seed value for reproducibility
                 """,
                 type=int,
-                default=385,
+                default=0,
             ),
             click.Option(
                 ("-m", "--model"),
@@ -121,14 +121,32 @@ def main():
     "--chunksize",
     type=int,
     show_default=True,
-    default=100000,
+    default=10000000,
     help="Specify the chunk size for each batch.",
+)
+@click.option(
+    "--partition_by",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Process the events.tsv file by partitioning it into groups based on read names."
+         "If enabled, each read will be processed independently, which may improve memory efficiency "
+         "for large datasets but increases processing time.",
+)
+@click.option(
+    "--rna",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Process and order the events.tsv file for RNA data.",
 )
 def preprocess(
     events_path,
     outdir,
     no_batches,
     chunksize,
+    partition_by,
+    rna,
     seed,
     model,
     config,
@@ -142,6 +160,7 @@ def preprocess(
     """
     setup_logging(verbosity)
     logger.info("seq2squiggle version %s", str(__version__))
+    logger.info(f"Preprocessing events.tsv file in {'RNA' if rna else 'DNA'} mode.")
     set_seeds(seed)
     config = set_config(config)
     preprocess_run(
@@ -149,6 +168,8 @@ def preprocess(
         outdir=outdir,
         batches=no_batches,
         chunksize=chunksize,
+        partition_by=partition_by,
+        rna=rna,
         config=config,
     )
     logger.info("Preprocessing done.")
@@ -213,7 +234,7 @@ def conditional_option(f):
         type=bool,
         help="Enable or disable the noise sampler.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--duration-sampler",
@@ -221,15 +242,15 @@ def conditional_option(f):
         type=bool,
         help="Enable or disable the duration sampler.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--dwell-mean",
-        default=9.0,
+        default=None,
         type=float,
-        help="Specify the mean dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
+        help="Specify the mean dwell time (= number of signal points per k-mer). This will only be used if the duration sampler is deactivated.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--dwell-std",
@@ -237,15 +258,15 @@ def conditional_option(f):
         type=float,
         help="Specify the standard deviation of the dwell time (=number of signal points per k-mer). This will only be used if the duration sampler is deactivated",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--noise-std",
-        default=1.0,
+        default=2.0,
         type=float,
         help="Set the standard deviation for noise.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--distr",
@@ -253,7 +274,7 @@ def conditional_option(f):
         type=click.Choice(["expon", "beta", "gamma"]),
         help="Choose a distribution for read sampling.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--predict-batch-size",
@@ -261,7 +282,7 @@ def conditional_option(f):
         type=int,
         help="Specify the batch size for prediction.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--export-every-n-samples",
@@ -269,15 +290,23 @@ def conditional_option(f):
         type=int,
         help="Specify how often the predicted samples should be saved.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--sample-rate",
-        default=5000,
+        default=None,
         type=int,
         help="Specify the sampling rate.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
+    )(f)
+    f = click.option(
+        "--bps",
+        default=None,
+        type=int,
+        help="Specify the translocation speed.",
+        show_default=True,
+        hidden=True
     )(f)
     f = click.option(
         "--digitisation",
@@ -285,7 +314,7 @@ def conditional_option(f):
         type=int,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--range_val",
@@ -293,7 +322,7 @@ def conditional_option(f):
         type=float,
         help="Specify the range value.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--offset_mean",
@@ -301,7 +330,7 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--offset_std",
@@ -309,7 +338,7 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--median_before_mean",
@@ -317,7 +346,7 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
     )(f)
     f = click.option(
         "--median_before_std",
@@ -325,7 +354,23 @@ def conditional_option(f):
         type=float,
         help="Specify the digitisation.",
         show_default=True,
-        hidden=True  # Hidden by default
+        hidden=True
+    )(f)
+    f = click.option(
+        "--min_noise",
+        default=0.0,
+        type=float,
+        help="Specify the minimal stdv value for the noise sampler.",
+        show_default=True,
+        hidden=True
+    )(f)
+    f = click.option(
+        "--min_duration",
+        default=3,
+        type=int,
+        help="Specify the minimal event duration.",
+        show_default=True,
+        hidden=True
     )(f)
     return f
 
@@ -346,7 +391,10 @@ def conditional_option(f):
     default=False,
     is_flag=True,
     show_default=True,
-    help="Disable read generation if the input FASTA/Q file contains reads instead of a single genome.",
+    help="Enable Read Mode: simulate signals directly from input reads in a FASTA or FASTQ file. "
+        "Use this when your input file contains already basecalled reads instead of a reference genome. "
+        "Each read will produce one signal by default. Combine with -n to sample multiple signals "
+        "from the existing reads without generating synthetic sequences.",
 )
 @click.option(
     "-n",
@@ -359,9 +407,9 @@ def conditional_option(f):
     "-r",
     "--read-length",
     type=int,
-    default=10000,
+    default=1000,
     show_default=True,
-    help="Specify the desired average read length.",
+    help="Specify the desired average read length. If set to 0 or -1, the entire transcript or genome will be simulated without sampling",
 )
 @click.option(
     "-c",
@@ -381,7 +429,7 @@ def conditional_option(f):
     "--profile",
     default="dna-r10-prom",
     show_default=True,
-    type=click.Choice(["dna-r10-prom", "dna-r10-min", "dna-r9-prom", "dna-r9-min"]),
+    type=click.Choice(["dna-r10-prom", "dna-r10-min", "dna-r9-prom", "dna-r9-min", "rna-004-prom", "rna-004-min"]),
     help="Select a profile for data simulation. The profile determines values for digitization, sample rate, range, offset mean, offset standard deviation, median before mean, and median before standard deviation.",
 )
 @click.option(
@@ -411,12 +459,15 @@ def predict(
     predict_batch_size,
     export_every_n_samples,
     sample_rate,
+    bps,
     digitisation,
     range_val,
     offset_mean,
     offset_std,
     median_before_mean,
     median_before_std,
+    min_noise,
+    min_duration,
     seed,
     model,
     config,
@@ -468,12 +519,15 @@ def predict(
         "predict_batch_size": predict_batch_size,
         "export_every_n_samples": export_every_n_samples,
         "sample_rate": sample_rate,
+        "bps": bps,
         "digitisation": digitisation,
         "range": range_val,
         "offset_mean": offset_mean,
         "offset_std": offset_std,
         "median_before_mean": median_before_mean,
         "median_before_std": median_before_std,
+        "min_noise": min_noise,
+        "min_duration": min_duration,
         "seed": seed,
         "model": model,
         "config": config,
@@ -510,12 +564,15 @@ def predict(
         predict_batch_size=predict_batch_size,
         export_every_n_samples=export_every_n_samples,
         sample_rate=sample_rate,
+        bps=bps,
         digitisation=digitisation,
         range_val=range_val,
         offset_mean=offset_mean,
         offset_std=offset_std,
         median_before_mean=median_before_mean,
         median_before_std=median_before_std,
+        min_noise=min_noise,
+        min_duration=min_duration,
         seed=seed,
     )
     logger.info("Prediction done.")

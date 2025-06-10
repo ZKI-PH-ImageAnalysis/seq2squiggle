@@ -39,6 +39,8 @@ class seq2squiggle(pl.LightningModule):
         noise_sampling: bool = False,
         duration_sampling: bool = False,
         export_every_n_samples: int = 2000000,
+        min_noise: float = 0.5,
+        min_duration: int = 1,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -57,6 +59,8 @@ class seq2squiggle(pl.LightningModule):
         self.duration_sampling = duration_sampling
         self.export_every_n_samples = export_every_n_samples
         self.total_samples = 0
+        self.min_noise = min_noise
+        self.min_duration = min_duration
 
     def training_step(self, batch, batch_idx):
         data, targets, data_ls, targets_ls, noise_std, *args = batch
@@ -75,12 +79,13 @@ class seq2squiggle(pl.LightningModule):
         noise_std_prediction = self.noise_sampler(emb_out.detach().clone())
         noise_std_prediction = noise_std_prediction[:, :, None]
 
-        length_predict_out, duration_pred_out, dist_duration, _ = self.length_regulator(
+        length_predict_out, duration_pred_out, dist_duration, _, _ = self.length_regulator(
             emb_out=emb_out.detach().clone(),
             x=enc_out,
             target=data_ls,
             noise_std_prediction=noise_std_prediction,
             max_length=self.config["max_signal_len"],
+            min_length=self.min_duration,
         )
 
         prediction = self.decoders(length_predict_out)
@@ -116,25 +121,27 @@ class seq2squiggle(pl.LightningModule):
         noise_std_prediction = self.noise_sampler(emb_out.detach().clone())
         noise_std_prediction = noise_std_prediction[:, :, None]
 
-        # signal with ground-truth duration for comparable validation loss
+        # First pass: using ground-truth durations for loss computation
         (
             length_predict_out,
             duration_pred_ref,
             dist_duration,
             noise_std_prediction_ext,
+            _
         ) = self.length_regulator(
             emb_out=emb_out,
             x=enc_out,
             target=data_ls,
             noise_std_prediction=noise_std_prediction,
             max_length=self.config["max_signal_len"],
+            min_length=self.min_duration,
         )
 
-        prediction = self.decoders(length_predict_out)
+        prediction_ref = self.decoders(length_predict_out)
 
         get_loss(
             self=self,
-            prediction=prediction,
+            prediction=prediction_ref,
             targets=targets,
             duration_pred_out=duration_pred_ref,
             data_ls=data_ls,
@@ -144,10 +151,10 @@ class seq2squiggle(pl.LightningModule):
             step="valid",
         )
 
-        prediction_idealtime = prediction.detach().clone()
+        prediction_ideal = prediction_ref.detach().clone()
 
-        # signal with predicted duration as output
-        length_predict_out, duration_pred_out, dist_duration, _ = self.length_regulator(
+        # Second pass: using predicted durations
+        length_predict_out, duration_pred_out, dist_duration, _, _ = self.length_regulator(
             emb_out,
             enc_out,
             target=None,
@@ -157,41 +164,30 @@ class seq2squiggle(pl.LightningModule):
         prediction = self.decoders(length_predict_out)
 
         if batch_idx == 0:
-            # Rescale target to raw values using a fixed scaling value
-            targets = targets.detach().cpu().squeeze()
-            targets = targets * self.config["scaling_max_value"]
-            # Rescale preds to raw values using a fixed scaling value
-            prediction = prediction.detach().cpu().squeeze()
-            prediction = prediction * self.config["scaling_max_value"]
-            prediction_idealamp = prediction.detach().clone()
-
-            prediction_idealtime = prediction_idealtime.detach().cpu().squeeze()
-            prediction_idealtime = (
-                prediction_idealtime * self.config["scaling_max_value"]
+            scaling = self.config["scaling_max_value"]
+            targets_scaled = (targets.detach().cpu().squeeze() * scaling)
+            pred_scaled = (prediction.detach().cpu().squeeze() * scaling)
+            ideal_scaled = (prediction.detach().cpu().squeeze() * scaling)
+            time_scaled = (prediction_ideal.detach().cpu().squeeze() * scaling)
+            noise_std_ext = torch.clamp(
+                noise_std_prediction_ext.detach().cpu().squeeze() * scaling, min=self.min_noise
             )
-
-            noise_std_prediction_ext = noise_std_prediction_ext.detach().cpu().squeeze()
-            noise_std_prediction_ext = (
-                noise_std_prediction_ext * self.config["scaling_max_value"]
-            )
-            noise_std_prediction_ext = torch.clamp(noise_std_prediction_ext, min=0.75)
-            gen_noise = torch.normal(mean=0, std=noise_std_prediction_ext)
-
-            non_zero_mask = prediction != 0
-            # Add the noise only to non-zero positions
-            prediction[non_zero_mask] += gen_noise[non_zero_mask]
-
-            prediction_noise = prediction.detach().clone()
+            # Add noise only where prediction is nonzero
+            gen_noise = torch.normal(mean=0, std=noise_std_ext)
+            non_zero = pred_scaled != 0
+            pred_scaled[non_zero] += gen_noise[non_zero]
 
             if self.save_valid_plots:
                 generate_validation_plots(
                     self,
-                    prediction_noise,
-                    prediction_idealamp,
-                    prediction_idealtime,
-                    targets,
+                    pred_scaled,
+                    ideal_scaled,
+                    time_scaled,
+                    targets_scaled,
                     data,
+                    data_ls,
                     log_dir=self._trainer.default_root_dir,
+                    config=self.config,
                 )
 
         return prediction
@@ -206,7 +202,7 @@ class seq2squiggle(pl.LightningModule):
         noise_std_prediction = self.noise_sampler(emb_out)
         noise_std_prediction = noise_std_prediction[:, :, None]
 
-        length_predict_out, _, _, noise_std_prediction_ext = self.length_regulator(
+        length_predict_out, _, _, noise_std_prediction_ext, padding_mask = self.length_regulator(
             emb_out=emb_out,
             x=enc_out,
             target=None,
@@ -215,18 +211,23 @@ class seq2squiggle(pl.LightningModule):
             dwell_mean=self.dwell_mean,
             dwell_std=self.dwell_std,
             duration_sampling=self.duration_sampling,
+            min_length=self.min_duration,
         )
 
-
-        prediction = self.decoders(length_predict_out)
+        prediction = self.decoders(length_predict_out, None)
+        # Just for runtime comparison
+        # prediction = length_predict_out[:, :, 0]
 
         prediction = prediction * self.config["scaling_max_value"]
         prediction = prediction.squeeze(-1)
-        
+
         if self.noise_std > 0:
             non_zero_mask = prediction != 0
+
             if self.noise_sampling:
-                noise_std = noise_std_prediction_ext.squeeze() * self.noise_std * self.config["scaling_max_value"]
+                noise_std_prediction_ext = torch.clamp(noise_std_prediction_ext, min=self.min_noise)
+
+                noise_std = noise_std_prediction_ext.squeeze(-1) * self.noise_std * self.config["scaling_max_value"]
 
                 gen_noise = torch.normal(mean=0, std=noise_std)
 
@@ -283,6 +284,8 @@ class seq2squiggle(pl.LightningModule):
         for k, v in res.items():
             concatenated_tensor = torch.cat(v)
             res[k] = concatenated_tensor[concatenated_tensor.nonzero()].squeeze()
+
+            
 
         self.out_writer.signals = res
         self.out_writer.save()

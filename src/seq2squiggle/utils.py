@@ -20,6 +20,7 @@ import psutil
 import multiprocessing
 from typing import List, Generator, Tuple, Union
 from uuid import uuid4
+from collections import Counter
 
 logger = logging.getLogger("seq2squiggle")
 
@@ -49,6 +50,7 @@ def n_workers() -> int:
     except AttributeError:
         n_cpu = os.cpu_count()
     return n_cpu // n_gpu if (n_gpu := torch.cuda.device_count()) > 1 else n_cpu
+
 
 
 def one_hot_encode(sequences: List[str], seq_len: int) -> np.ndarray:
@@ -148,6 +150,7 @@ def get_profile(profile):
         "dna-r10-min": {
             "digitisation": 8192,
             "sample_rate": 5000,
+            "bps": 400,
             "range": 1536.598389,
             "offset_mean": 13.380569389019,
             "offset_std": 16.311471649012,
@@ -157,6 +160,7 @@ def get_profile(profile):
         "dna-r10-prom": {
             "digitisation": 2048,
             "sample_rate": 5000,
+            "bps": 400,
             "range": 281.345551,
             "offset_mean": -127.5655735,
             "offset_std": 19.377283387665,
@@ -166,6 +170,7 @@ def get_profile(profile):
         "dna-r9-min": {
             "digitisation": 8192,
             "sample_rate": 4000,
+            "bps": 450,
             "range": 1443.030273,
             "offset_mean": 13.7222605,
             "offset_std": 10.25279688,
@@ -175,11 +180,32 @@ def get_profile(profile):
         "dna-r9-prom": {
             "digitisation": 2048,
             "sample_rate": 4000,
+            "bps": 450,
             "range": 748.5801,
             "offset_mean": -237.4102,
             "offset_std": 14.1575,
             "median_before_mean": 214.2890337,
             "median_before_std": 18.0127916,
+        },
+        "rna-004-min": {
+            "digitisation": 8192,
+            "sample_rate": 4000,
+            "bps": 130,
+            "range": 1437.976685,
+            "offset_mean": 12.47686423863,
+            "offset_std": 10.442126577137,
+            "median_before_mean": 205.08496731088,
+            "median_before_std": 8.6671292866233,
+        },
+        "rna-004-prom": {
+            "digitisation": 2048,
+            "sample_rate": 4000,
+            "bps": 130,
+            "range": 299.432068,
+            "offset_mean": -259.421128,
+            "offset_std": 16.010841823643,
+            "median_before_mean": 189.87607393756,
+            "median_before_std": 15.788097978713,
         },
     }
 
@@ -228,7 +254,7 @@ def update_config(profile_name, config):
     Returns:
         dict: The updated configuration dictionary.
     """
-    if profile_name.startswith("dna-r10"):
+    if profile_name.startswith("dna-r10") or profile_name.startswith("rna-004"):
         config["seq_kmer"] = 9
     elif profile_name.startswith("dna-r9"):
         config["seq_kmer"] = 6
@@ -261,7 +287,7 @@ def regular_break_points(n, chunk_len, overlap=0, align="left"):
     return np.vstack([starts, starts + chunk_len]).T
 
 
-def read_fasta(path: str) -> Generator[Tuple[str, str], None, None]:
+def read_fasta(path: str, rna: bool) -> Generator[Tuple[str, str], None, None]:
     """
     Reads sequences and their names from a FASTA file.
 
@@ -344,20 +370,21 @@ def get_genome_and_position(genome_lengths, random_position):
             return genome_index, position_within_genome
 
 
-def sample_single_genome(genome, read_length, start_index):
+def sample_single_ref(ref, read_length, start_index):
     """
     Sample a read of specified length from a single genome.
     """
     end_index = start_index + read_length
-    return genome[start_index:end_index]
+    return ref[start_index:end_index]
 
 
-def read_check(read, read_length, read_i):
-    if len(read) != read_length:
-        logger.debug(
-            f"Sampled Read length of read {read_i} is shorter than real read length."
-        )
-        return False
+def read_check(read, read_length, read_i, profile):
+    if profile.startswith("dna"):
+        if len(read) != read_length:
+            logger.debug(
+                f"Sampled Read length of read {read_i} is shorter than real read length."
+            )
+            return False
     if len(read) < 100:
         logger.debug(f"Sampled Read length of read {read_i} is too short.")
         return False
@@ -386,7 +413,7 @@ def reverse_complement(f):
 
 
 def sampling(
-    num_seqs, genome_seqs, genome_lens, r, seed, total_len, distr, max_retries=20
+    num_seqs, genome_seqs, genome_lens, r, seed, total_len, distr, profile, max_retries=20
 ):
     """
     Sample reads from each single genome.
@@ -409,18 +436,28 @@ def sampling(
         while retries < max_retries:
             # Find the corresponding genome and its start index
             start_pos = random.randint(0, total_genome_len - 1)
+
             genome_index, start_index = get_genome_and_position(genome_lens, start_pos)
+
             genome = genome_seqs[genome_index]
 
             # Generate a unique seed for each read and retry combination
             unique_seed = seed + read_i * (max_retries + 1) + retries
-            read_length = distr_funcs[distr](r, unique_seed, total_len)
 
-            read = sample_single_genome(genome, read_length, start_index)
-
-            read_strand = get_strand()
-
-            if read_check(read, read_length, read_i):
+            # Determine the read length
+            if r > 0:
+                read_length = distr_funcs[distr](r, unique_seed, total_len)
+            else:
+                read_length = len(genome)
+           
+            # Sample read based on profile type
+            read = sample_single_ref(genome, read_length, start_index)
+            if profile.startswith("dna"):
+                read_strand = get_strand()
+            elif profile.startswith("rna"):
+                read_strand = "+"  # RNA is always on the + strand
+            
+            if read_check(read, read_length, read_i, profile):
                 if "N" in read:
                     read = N_to_ACTG(read)
 
@@ -447,7 +484,7 @@ def yield_reads(reads):
     return ((read, str(uuid4())) for i, read in enumerate(reads))
 
 
-def sample_reads_from_genome(
+def sample_reads_from_reference(
     genome_seqs: List[str],
     genome_lens: List[int],
     n: int,
@@ -457,7 +494,8 @@ def sample_reads_from_genome(
     fasta: str,
     seed: int,
     save: bool = False,
-    distr: str = "expon"
+    distr: str = "expon",
+    profile: str = "dna-r10-min"
 ) -> Tuple[Union[str, None], int]:
     """
     Sample reads from genome sequences based on the provided parameters.
@@ -491,8 +529,8 @@ def sample_reads_from_genome(
         If `save` is True, returns a tuple of the path to the saved reads FASTA file and the total length of reads.
         If `save` is False, returns a tuple of a generator for the reads and the total length of reads.
     """
-    logger.debug("Generating reads.")
-    if n == -1 and c == 1:
+    logger.debug("Generating reads from the reference input file.")
+    if n <= 0 and c <= 0:
         logger.error("You need to specify the coverage c or the number of reads n")
         raise ValueError("You need to specify the coverage c or the number of reads n")
 
@@ -504,12 +542,24 @@ def sample_reads_from_genome(
             "You can only either specify the coverage c or the number of reads, but not both"
         )
 
+    if r <= 0:
+        logger.error("You need to specify an average read length r for sampling from the reads from the reference sequence.")
+        raise ValueError("You need to specify the read length r")
+
     total_len = sum([len(seq) for seq in genome_seqs])
+    avg_genome_len = total_len / len(genome_seqs)
     seq_num = round(c * total_len / r)
     seq_num = n if n != -1 else seq_num
     logger.debug(f"Number of reads: {seq_num}")
 
-    read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr)
+    if r > avg_genome_len and profile.startswith("dna"):
+        logger.warning(
+            f"Average reference sequence length ({avg_genome_len:.2f}) is smaller than the desired average read length ({r})."
+            " If the sampled read length is higher than the reference sequence length, they will be skipped."
+            " Consider reducing the desired average read length via -r."
+        )
+
+    read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr, profile)
 
     total_l = sum([round(len(read) / config["max_dna_len"]) for read in read_list])
 
@@ -521,6 +571,8 @@ def sample_reads_from_genome(
     logger.debug("Generating reads finished.")
 
     return reads_fasta, total_l
+
+
 
 
 def load_genome(fasta):
@@ -577,25 +629,35 @@ def preprocess_genome(fasta: str):
     return genome_seq_list, genome_len_list
 
 
-def get_reads(fasta, read_input, n, r, c, config, distr, seed, save=False):
-    if read_input == False:
-        logger.info(f"Genome mode. Reads will be generated from input fasta: {fasta}")
+def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, save=False):
+    logger.info(f"{'Read' if read_input else 'Reference'} mode.")
+    is_rna = profile.startswith("rna")
+
+    if read_input: # Read mode
+        # If n is -1, each read will be simulated exactly once.
+        if n <= 0:
+            reads_generator = read_fasta(fasta, is_rna)
+            total_reads = compute_totals(read_fasta(fasta, is_rna))[1]
+            return reads_generator, total_reads
+        # Otherwise, we sample n reads
+
+        # Store all reads 
+        all_reads = list(read_fasta(fasta, is_rna))
+
+        rng = random.Random(seed)
+        sampled = [rng.choice(all_reads) for _ in range(n)]
+
+        def generator() -> Generator[Tuple[str, str], None, None]:
+            for seq, _ in sampled:
+                yield seq, str(uuid4())
+
+        return generator(), n
+        
+    else: # Reference mode
         genome_seqs, genome_lens = preprocess_genome(fasta)
-        reads_fasta, total_l = sample_reads_from_genome(
-            genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr
-        )
-        if save:
-            return read_fasta(reads_fasta)
-        return reads_fasta, total_l
-    else:
-        logger.info(
-            f"Read mode. Signals will be simulated directly from reads: {fasta}"
-        )
-        reads_generator = read_fasta(fasta)
-        total_reads, total_length = compute_totals(reads_generator)
-        # Recreate the generator for actual use
-        reads_generator = read_fasta(fasta)
-        return reads_generator, total_length
+        reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr, profile)
+    
+    return read_fasta(reads_fasta, is_rna) if save else (reads_fasta, total_l)
 
 
 def count_parameters(model):
@@ -653,7 +715,14 @@ def set_seeds(seed):
     Arguments:
     seed - int seed value
     """
-    logger.info(f"Setting seeds using random seed {seed}")
+
+    # If seed is 0 generate a new random seed.
+    if not seed:
+        # Draw 4 bytes from the OS’s CSPRNG and convert to an int in [0, 2**32-1].
+        seed = int.from_bytes(os.urandom(4), byteorder="big", signed=False)
+        logger.info(f"No seed provided. Generated random seed: {seed}")
+
+    logger.info(f"Setting all random seeds to {seed}")
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
     torch.manual_seed(seed)
@@ -703,40 +772,82 @@ def generate_validation_plots(
     prediction_idealtime,
     targets,
     data,
+    data_ls,
     log_dir,
+    config,
     bs=12,
     devices=0,
 ):
-    # Adjust batch size if it exceeds the number of targets
     bs = min(bs, targets.shape[0])
-
-    # Select a subset of data for plotting
+    # Select subset for plotting
     targets = targets[:bs]
     prediction = prediction[:bs]
     prediction_idealamp = prediction_idealamp[:bs]
     prediction_idealtime = prediction_idealtime[:bs]
     data = data[:bs]
-
-    for batch_idx, (
-        batch_pred,
-        batch_pred_idealamp,
-        batch_pred_idealtime,
-        batch_target,
-        batch_dna,
-    ) in enumerate(
-        zip(prediction, prediction_idealamp, prediction_idealtime, targets, data)
+    data_ls = data_ls[:bs]
+    
+    reference_image_paths = []
+    all_signals_image_paths = []
+    
+    for batch_idx, (batch_pred, batch_pred_idealamp, batch_pred_idealtime,
+                    batch_target, batch_dna, batch_reflen) in enumerate(
+        zip(prediction, prediction_idealamp, prediction_idealtime, targets, data, data_ls)
     ):
+        seq_len = batch_dna.shape[0]
+        # Reshape the DNA tensor to (seq_len, seq_kmer, allowed_chars)
+        batch_dna = batch_dna.reshape(seq_len, config["seq_kmer"], len(config["allowed_chars"]))
+        batch_dna_str = decode_one_hot(batch_dna.cpu().data.numpy())
+        batch_reflen = batch_reflen.cpu().data.numpy()
+        
         plot_signal(
             batch_pred,
             batch_pred_idealamp,
             batch_pred_idealtime,
             batch_target,
-            batch_dna,
+            batch_dna_str,
+            batch_reflen,
             self.current_epoch,
             self.config["log_name"],
             batch_idx,
             log_dir=log_dir,
         )
+        out_dir = os.path.join(log_dir, f"epoch_{self.current_epoch}")
+        reference_image_file = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
+        all_signals_image_file = os.path.join(out_dir, f"batch_{batch_idx}_all_signals.png")
+        if os.path.exists(reference_image_file):
+            reference_image_paths.append(reference_image_file)
+        if os.path.exists(all_signals_image_file):
+            all_signals_image_paths.append(all_signals_image_file)
+
+def reconstruct_full_sequence(kmers):
+        """
+        Reconstructs the full DNA sequence from overlapping k-mers.
+        
+        Parameters
+        ----------
+        kmers : List[str]
+            A list of overlapping k-mer sequences.
+        
+        Returns
+        -------
+        str
+            The reconstructed full DNA sequence.
+        """
+        full_sequence = kmers[0]  # Start with the first k-mer
+        for kmer in kmers[1:]:
+            full_sequence += kmer[-1]  # Append the last character of each subsequent k-mer
+        return full_sequence
+
+def setup_plot(figsize=(12, 6), xlabel="Signal Points", ylabel="Current (pA)"):
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.grid(which="major", linestyle="solid")
+    ax.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    return fig, ax
 
 
 def plot_signal(
@@ -744,43 +855,61 @@ def plot_signal(
     batch_pred_idealamp,
     batch_pred_idealtime,
     target,
-    data_input,
+    batch_dna_str,
+    batch_reflen,
     epoch,
     log_name,
     batch_idx,
     log_dir,
     dec_output_FR=None,
-):
-    # Convert data_input to numpy array
-    data_input = data_input.cpu().data.numpy()
-
-    # Create a figure and axis
-    fig, ax = plt.subplots()
-    ax.yaxis.set_minor_locator(AutoMinorLocator())
-    ax.xaxis.set_minor_locator(AutoMinorLocator())
-
-    # Set labels and grid
-    plt.xlabel("Time")
-    plt.ylabel("Normalized signal")
-    plt.grid(which="major", linestyle="solid")
-    plt.grid(which="minor", linestyle=(0, (1, 10)), axis="y")
-
-    # Plot true and predicted signals
-    X_time = range(0, len(target.flatten()))
-    plt.plot(X_time, target.flatten(), label="True")
-    plt.plot(X_time, batch_pred.flatten(), label="Default pred")
-    plt.plot(X_time, batch_pred_idealamp.flatten(), label="Ideal amp pred")
-    plt.plot(X_time, batch_pred_idealtime.flatten(), label="Ideal time pred")
-    plt.legend(loc="lower left")
-
+):  
+    
+    # Reconstruct full sequence from k-mers
+    full_sequence = reconstruct_full_sequence(batch_dna_str)
+    # Calculate the actual signal length (without padding)
+    actual_length = int(sum(batch_reflen))
+    
     # Create output directory if it doesn't exist
-    out_dir = os.path.join(log_dir, f"epoch_{epoch}/")
+    out_dir = os.path.join(log_dir, f"epoch_{epoch}")
     os.makedirs(out_dir, exist_ok=True)
-
-    # Save plot as PNG file
-    out_file = os.path.join(out_dir, f"batch_{batch_idx}.png")
-    plt.savefig(out_file, dpi=100)
-
-    # Clear plot and close figure to release memory
-    plt.clf()
-    plt.close()
+    
+    # Plot 1: Reference Signal with k-mer boundaries
+    fig, ax = setup_plot(figsize=(12, 6))
+    x_axis = range(actual_length)
+    target_signal = target.flatten()[:actual_length]
+    ax.plot(x_axis, target_signal, label="Reference Signal")
+    ax.plot(x_axis, batch_pred_idealtime.flatten()[:actual_length], 
+            label="Simulated Signal (no added noise + no sampled duration)", color="C3")
+    
+    cumulative_length = 0
+    for kmer, reflen in zip(batch_dna_str, batch_reflen):
+        ax.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
+        midpoint = cumulative_length + reflen / 2
+        ax.text(midpoint, target_signal.max() * 0.95, kmer, ha="center", va="bottom",
+                fontsize=4, rotation=90)
+        cumulative_length += reflen
+    ax.axvline(x=cumulative_length, color="#404040", linestyle="--", linewidth=0.8, alpha=0.8)
+    ax.legend(loc="upper right", fontsize=10, frameon=True, edgecolor="black")
+    ax.set_title(f"Reference Signal with k-mers - Batch {batch_idx} - {full_sequence}",
+                 fontsize=12, pad=10)
+    ax.set_ylim(bottom=-10, top=target_signal.max() * 1.3)
+    ref_file = os.path.join(out_dir, f"batch_{batch_idx}_reference.png")
+    fig.savefig(ref_file, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    
+    # Plot 2: All Signals (Reference and Predictions)
+    fig, ax = setup_plot(figsize=(12, 6))
+    full_x = range(len(target.flatten()))
+    target_full = target.flatten()
+    ax.plot(full_x, target_full, label="Reference Signal")
+    ax.plot(full_x, batch_pred.flatten(), label="Simulated Signal")
+    ax.plot(full_x, batch_pred_idealamp.flatten(), label="Simulated Signal (no added noise)")
+    ax.plot(full_x, batch_pred_idealtime.flatten(), 
+            label="Simulated Signal (no added noise + no sampled duration)")
+    ax.legend(loc="upper right", fontsize=10, frameon=True, edgecolor="black")
+    ax.set_title(f"All Signals Prediction - Batch {batch_idx} - {full_sequence}",
+                 fontsize=12, pad=10)
+    ax.set_ylim(bottom=-10, top=target_full.max() * 1.3)
+    all_file = os.path.join(out_dir, f"batch_{batch_idx}_all_signals.png")
+    fig.savefig(all_file, dpi=200, bbox_inches="tight")
+    plt.close(fig)

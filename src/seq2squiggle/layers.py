@@ -21,7 +21,20 @@ class ScaledDotProductAttention(nn.Module):
         attn = attn / self.temperature
 
         if mask is not None:
+            # mask initially is [batch, len_k] (e.g., [128, 900])
+            batch = mask.size(0)
+            # Unsqueeze to add a query dimension: [batch, 1, len_k]
+            mask = mask.unsqueeze(1)
+            # Expand the mask along the query dimension so that every query position sees the same key mask.
+            # q.size(1) is len_q (e.g., 900), so now shape becomes [batch, len_q, len_k].
+            mask = mask.expand(-1, q.size(1), -1)
+            # Calculate the number of heads (n_head) by using the attention tensor's batch dimension.
+            # attn has shape [batch * n_head, len_q, len_k]
+            n_rep = attn.size(0) // batch  
+            # Repeat the mask for each head: final shape [batch*n_head, len_q, len_k]
+            mask = mask.repeat(n_rep, 1, 1)
             attn = attn.masked_fill(mask, -torch.inf)
+
 
         attn = self.softmax(attn)
         output = bmm(attn, v)
@@ -119,9 +132,9 @@ class FFTBlock(nn.Module):
         )
         self.pos_ffn = PositionwiseFeedForward(d_model, d_inner, dropout=ff_dropout)
 
-    def forward(self, enc_input, mask=None, slf_attn_mask=None):
+    def forward(self, enc_input, mask=None):
         enc_output, enc_slf_attn = self.slf_attn(
-            enc_input, enc_input, enc_input, mask=slf_attn_mask
+            enc_input, enc_input, enc_input, mask=mask
         )
 
         enc_output = self.pos_ffn(enc_output)

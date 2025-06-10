@@ -351,7 +351,6 @@ class IterableFastaDataSet(IterableDataset):
     def __iter__(self):
         return self.iterable
 
-
     def __len__(self):
         return self.length
 
@@ -494,7 +493,6 @@ def load_numpy(
         return sorted(
             os.path.join(directory, f) for f in os.listdir(directory) if f.startswith(prefix)
         )
-    
 
     chunks_train = load_paths(npy_train, "chunks-")
     targets_train = load_paths(npy_train, "targets-")
@@ -548,6 +546,7 @@ def load_numpy(
         )
     )
     check_file_order(chunks_valid, targets_valid)
+
     train_loader_kwargs = {
         "dataset": ChunkDataSetMemmap(
             chunks_train,
