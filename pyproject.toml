@@ -11,7 +11,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 appdirs = "^1.4.4"
-torch = "^2.3.1"
+torch = "^2.6.0"
 lightning = "^2.2.5"
 pod5 = "^0.3.12"
 PyGithub = "^2.3.0"
