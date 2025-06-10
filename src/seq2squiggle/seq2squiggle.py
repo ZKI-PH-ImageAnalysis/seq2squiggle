@@ -391,7 +391,10 @@ def conditional_option(f):
     default=False,
     is_flag=True,
     show_default=True,
-    help="Disable read generation if the input FASTA/Q file contains reads instead of a single genome.",
+    help="Enable Read Mode: simulate signals directly from input reads in a FASTA or FASTQ file. "
+        "Use this when your input file contains already basecalled reads instead of a reference genome. "
+        "Each read will produce one signal by default. Combine with -n to sample multiple signals "
+        "from the existing reads without generating synthetic sequences.",
 )
 @click.option(
     "-n",
