@@ -372,6 +372,14 @@ def conditional_option(f):
         show_default=True,
         hidden=True
     )(f)
+    f = click.option(
+        "--min_read_len",
+        default=30,
+        type=int,
+        help="Specify the minimal read length for reference mode.",
+        show_default=True,
+        hidden=True
+    )(f)
     return f
 
 
@@ -468,6 +476,7 @@ def predict(
     median_before_std,
     min_noise,
     min_duration,
+    min_read_len,
     seed,
     model,
     config,
@@ -528,6 +537,7 @@ def predict(
         "median_before_std": median_before_std,
         "min_noise": min_noise,
         "min_duration": min_duration,
+        "min_read_len": min_read_len,
         "seed": seed,
         "model": model,
         "config": config,
@@ -573,6 +583,7 @@ def predict(
         median_before_std=median_before_std,
         min_noise=min_noise,
         min_duration=min_duration,
+        min_read_len=min_read_len,
         seed=seed,
     )
     logger.info("Prediction done.")

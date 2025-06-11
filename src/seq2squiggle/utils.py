@@ -378,15 +378,15 @@ def sample_single_ref(ref, read_length, start_index):
     return ref[start_index:end_index]
 
 
-def read_check(read, read_length, read_i, profile):
+def read_check(read, read_length, read_i, profile, min_read_len=30):
     if profile.startswith("dna"):
         if len(read) != read_length:
             logger.debug(
-                f"Sampled Read length of read {read_i} is shorter than real read length."
+                f"Sampled Read length ({len(read)}) of read {read_i} is shorter than real read length ({read_length})."
             )
             return False
-    if len(read) < 100:
-        logger.debug(f"Sampled Read length of read {read_i} is too short.")
+    if len(read) < min_read_len:
+        logger.debug(f"Sampled Read length ({len(read)}) of read {read_i} is shorter than the minimal read length ({min_read_len}).")
         return False
     count_N = read.count("N")
     if count_N > 0.1 * read_length:
@@ -413,7 +413,7 @@ def reverse_complement(f):
 
 
 def sampling(
-    num_seqs, genome_seqs, genome_lens, r, seed, total_len, distr, profile, max_retries=20
+    num_seqs, genome_seqs, genome_lens, r, seed, total_len, distr, profile, min_read_len=30, max_retries=20
 ):
     """
     Sample reads from each single genome.
@@ -457,7 +457,7 @@ def sampling(
             elif profile.startswith("rna"):
                 read_strand = "+"  # RNA is always on the + strand
             
-            if read_check(read, read_length, read_i, profile):
+            if read_check(read, read_length, read_i, profile, min_read_len):
                 if "N" in read:
                     read = N_to_ACTG(read)
 
@@ -468,6 +468,14 @@ def sampling(
                 break
             else:
                 retries += 1
+                if retries >= max_retries:
+                    logger.debug(
+                        f"Failed to sample a valid read after {max_retries} retries for read {read_i}. Skipping this read."
+                    )
+                else:
+                    logger.debug(
+                        f"Retrying to sample read {read_i} (attempt {retries + 1}/{max_retries})"
+                    )
     return sampled_reads
 
 
@@ -495,7 +503,8 @@ def sample_reads_from_reference(
     seed: int,
     save: bool = False,
     distr: str = "expon",
-    profile: str = "dna-r10-min"
+    profile: str = "dna-r10-min",
+    min_read_len: int = 30,
 ) -> Tuple[Union[str, None], int]:
     """
     Sample reads from genome sequences based on the provided parameters.
@@ -559,7 +568,7 @@ def sample_reads_from_reference(
             " Consider reducing the desired average read length via -r."
         )
 
-    read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr, profile)
+    read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr, profile, min_read_len)
 
     total_l = sum([round(len(read) / config["max_dna_len"]) for read in read_list])
 
@@ -629,7 +638,7 @@ def preprocess_genome(fasta: str):
     return genome_seq_list, genome_len_list
 
 
-def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, save=False):
+def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, min_read_len, save=False):
     logger.info(f"{'Read' if read_input else 'Reference'} mode.")
     is_rna = profile.startswith("rna")
 
@@ -655,7 +664,7 @@ def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, save=Fal
         
     else: # Reference mode
         genome_seqs, genome_lens = preprocess_genome(fasta)
-        reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr, profile)
+        reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr, profile, min_read_len)
     
     return read_fasta(reads_fasta, is_rna) if save else (reads_fasta, total_l)
 
