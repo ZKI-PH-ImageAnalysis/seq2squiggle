@@ -666,7 +666,9 @@ def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, min_read
             for seq, _ in sampled:
                 yield seq, str(uuid4())
 
-        return generator(), n
+        effective_length = sum([round(len(seq) / config["max_dna_len"]) for seq, _ in sampled])
+
+        return generator(), effective_length
         
     else: # Reference mode
         genome_seqs, genome_lens = preprocess_genome(fasta)
