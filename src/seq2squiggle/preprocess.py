@@ -401,7 +401,7 @@ def process_df(
         # Reverse the signal values in the 'samples' column
         .with_columns(
         pl.col("samples") # Reverse the signal for RNA processing
-        .apply(lambda x: ",".join(x.split(",")[::-1]), return_dtype=pl.Utf8) 
+        .map_elements(lambda x: ",".join(x.split(",")[::-1]), return_dtype=pl.Utf8) 
         .alias("reversed_samples")  # Store the result in a new column
         )
     )
