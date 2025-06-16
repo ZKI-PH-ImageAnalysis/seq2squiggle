@@ -291,6 +291,7 @@ def inference_run(
     median_before_std: float,
     min_noise: float,
     min_duration: float,
+    min_read_len: int,
     seed: int,
 ):
     """
@@ -392,7 +393,7 @@ def inference_run(
 
     check_model(load_model, config)
 
-    reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed, profile)
+    reads, total_l = get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, min_read_len)
 
     # "gamma_cpu" not implemented for 'BFloat16'
     precision = "16-mixed" if torch.cuda.device_count() >= 1 else "32"
