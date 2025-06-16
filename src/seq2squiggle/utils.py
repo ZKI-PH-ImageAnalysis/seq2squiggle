@@ -156,7 +156,6 @@ def get_profile(profile):
             "offset_std": 16.311471649012,
             "median_before_mean": 202.15407438804,
             "median_before_std": 13.406139241768,
-            "dwell_mean": 9.0,
         },
         "dna-r10-prom": {
             "digitisation": 2048,
@@ -167,7 +166,6 @@ def get_profile(profile):
             "offset_std": 19.377283387665,
             "median_before_mean": 189.87607393756,
             "median_before_std": 15.788097978713,
-            "dwell_mean": 9.0,
         },
         "dna-r9-min": {
             "digitisation": 8192,
@@ -178,7 +176,6 @@ def get_profile(profile):
             "offset_std": 10.25279688,
             "median_before_mean": 200.815801,
             "median_before_std": 20.48933762,
-            "dwell_mean": 9.0,
         },
         "dna-r9-prom": {
             "digitisation": 2048,
@@ -189,7 +186,6 @@ def get_profile(profile):
             "offset_std": 14.1575,
             "median_before_mean": 214.2890337,
             "median_before_std": 18.0127916,
-            "dwell_mean": 9.0,
         },
         "rna-004-min": {
             "digitisation": 8192,
@@ -200,7 +196,6 @@ def get_profile(profile):
             "offset_std": 10.442126577137,
             "median_before_mean": 205.08496731088,
             "median_before_std": 8.6671292866233,
-            "dwell_mean": 30.0,
         },
         "rna-004-prom": {
             "digitisation": 2048,
@@ -211,7 +206,6 @@ def get_profile(profile):
             "offset_std": 16.010841823643,
             "median_before_mean": 189.87607393756,
             "median_before_std": 15.788097978713,
-            "dwell_mean": 30.0,
         },
     }
 
