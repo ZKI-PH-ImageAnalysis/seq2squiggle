@@ -23,6 +23,41 @@ def indexed_uuid(index: int) -> uuid.UUID:
     return uuid.UUID(f"00000000-0000-0000-0000-{index:012d}")
 
 
+def get_seq_kit_and_flow_cell(profile_name: str):
+    """
+    Return the sequencing kit and flow cell product code based on the profile name.
+    """
+    mapping = {
+        "rna-004": {
+            "seq_kit": "sqk-rna004",
+            "prom": "FLO-PRO004RA",
+            "min": "FLO-MIN004RA"
+        },
+        "rna-002": {
+            "seq_kit": "sqk-rna002",
+            "prom": "FLO-PRO002",
+            "min": "FLO-MIN106"
+        },
+        "dna-r10": {
+            "seq_kit": "SQK-LSK114",
+            "prom": "FLO-PRO114",
+            "min": "FLO-MIN114"
+        },
+        "dna-r9": {
+            "seq_kit": "SQK-LSK109",
+            "prom": "FLO-PRO001",
+            "min": "FLO-MIN110"
+        }
+    }
+
+    for prefix, data in mapping.items():
+        if profile_name.startswith(prefix):
+            flow_cell_key = "prom" if "prom" in profile_name else "min" if "min" in profile_name else None
+            if flow_cell_key is None:
+                break
+            return data["seq_kit"], data[flow_cell_key]
+
+    raise ValueError(f"Unsupported profile name: {profile_name}")
 
 class BLOW5Writer:
     """
@@ -57,6 +92,7 @@ class BLOW5Writer:
             logger.warning("SLOW5 was not exported. No signals were found")
             raise ValueError("SLOW5 was not exported. No signals were found")
 
+        seq_kit, flow_cell_product_code = get_seq_kit_and_flow_cell(self.profile_name)
         # Check if file exists for appending mode
         f_mode = "a" if os.path.exists(self.filename) else "w"
         logger.debug(f"File mode for saving: {f_mode}")
@@ -70,9 +106,10 @@ class BLOW5Writer:
             header['exp_start_time'] = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
             header['run_id'] = 'run_id_0'
             header['flow_cell_id'] = 'FAN00000'
+            header['flow_cell_product_code'] = flow_cell_product_code
             header['experiment_type'] = 'rna' if self.profile_name.startswith("rna") else 'genomic_dna'
             header['sample_frequency'] = int(self.sample_rate)
-            header['sequencing_kit'] = 'sqk-rna004' if self.profile_name.startswith("rna") else 'sqk-lsk114'
+            header['sequencing_kit'] = seq_kit
 
             # Remove any fields with None values from header
             header = {key: value for key, value in header.items() if value is not None}
@@ -165,7 +202,7 @@ class POD5Writer:
             logger.warning("POD5 was not exported. No signals were found")
             raise ValueError("POD5 was not exported. No signals were found")
 
-        
+        seq_kit, flow_cell_product_code = get_seq_kit_and_flow_cell(self.profile_name)
 
         run_info = pod5.RunInfo(
             acquisition_id="",  # f5d5051ec9f7983c76e78543f720289d2988ce48
@@ -175,13 +212,13 @@ class POD5Writer:
             context_tags={},
             experiment_name="",  # choose a name
             flow_cell_id="",  # FAV99375
-            flow_cell_product_code="",  # FLO-MIN114
+            flow_cell_product_code=flow_cell_product_code,  # FLO-MIN114
             protocol_name="",  # sequencing/sequencing_MIN114_DNA_e8_2_400K:FLO-MIN114:SQK-LSK114:400
             protocol_run_id="",  # a2f3daba-e515-4853-859f-79bb92079c23
             protocol_start_time=datetime.now(),
-            sample_id="",  # no_sample
+            sample_id="test",  # no_sample
             sample_rate=int(self.sample_rate),
-            sequencing_kit="",  # sqk-lsk114
+            sequencing_kit=seq_kit,  # sqk-lsk114
             sequencer_position="",  # MN44571
             sequencer_position_type="",  # MinION Mk1B
             software="",  # MinKNOW 23.04.6 (Bream 7.5.10, Core 5.5.5, Guppy unknown)
