@@ -28,7 +28,11 @@ logger = logging.getLogger("seq2squiggle")
 
 
 def get_writer(
-    out: str, profile: object, ideal_mode: bool, export_every_n_samples: int, profile_name: str,
+    out: str, profile: object, 
+    ideal_mode: bool, 
+    export_every_n_samples: int, 
+    profile_name: str, 
+    preserve_read_ids: bool,
 ) -> tuple:
     """
     Returns an appropriate file writer object based on the output file extension.
@@ -63,7 +67,7 @@ def get_writer(
         os.remove(out)
 
     if any(out_base.endswith(ext) for ext in slow5_ext):
-        return BLOW5Writer(out, profile, ideal_mode, profile_name), export_every_n_samples
+        return BLOW5Writer(out, profile, ideal_mode, profile_name, preserve_read_ids), export_every_n_samples
     elif out_base.endswith(pod5_ext):
         logger.warning("POD5 Writer does not support appending to an existing file.")
         logger.warning(
@@ -72,7 +76,7 @@ def get_writer(
         logger.warning(
             "This might lead to Out of Memory errors for large-scale simulations. Consider exporting to BLOW5/SLOW5 and using the blue_crab tool for conversion to pod5."
         )
-        return POD5Writer(out, profile, ideal_mode, profile_name), float("inf")
+        return POD5Writer(out, profile, ideal_mode, profile_name, preserve_read_ids), float("inf")
     else:
         logger.error("Output file must have .pod5, .slow5, or .blow5 extension.")
         raise ValueError("Output file must have .pod5, .slow5, or .blow5 extension.")
@@ -292,6 +296,7 @@ def inference_run(
     min_noise: float,
     min_duration: float,
     min_read_len: int,
+    preserve_read_ids: bool,
     seed: int,
 ):
     """
@@ -359,7 +364,7 @@ def inference_run(
     ideal_mode = not(duration_sampling or dwell_std > 0)
     
     writer, export_every_n_samples = get_writer(
-        out, profile_dict, ideal_mode, export_every_n_samples, profile_name=profile
+        out, profile_dict, ideal_mode, export_every_n_samples, profile_name=profile, preserve_read_ids=preserve_read_ids,
     )
 
     if saved_weights is None:
