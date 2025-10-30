@@ -380,6 +380,13 @@ def conditional_option(f):
         show_default=True,
         hidden=True
     )(f)
+    f = click.option(
+        "--preserve-read-ids",
+        is_flag=True,
+        default=False,
+        help="Preserve original read IDs from input instead of generating synthetic UUID4s.",
+        show_default=True,
+    )(f)
     return f
 
 
@@ -477,6 +484,7 @@ def predict(
     min_noise,
     min_duration,
     min_read_len,
+    preserve_read_ids,
     seed,
     model,
     config,
@@ -538,6 +546,7 @@ def predict(
         "min_noise": min_noise,
         "min_duration": min_duration,
         "min_read_len": min_read_len,
+        "preserve_read_ids": preserve_read_ids,
         "seed": seed,
         "model": model,
         "config": config,
@@ -584,6 +593,7 @@ def predict(
         min_noise=min_noise,
         min_duration=min_duration,
         min_read_len=min_read_len,
+        preserve_read_ids=preserve_read_ids,
         seed=seed,
     )
     logger.info("Prediction done.")
