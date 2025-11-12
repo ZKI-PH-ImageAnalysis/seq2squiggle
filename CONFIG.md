@@ -64,7 +64,7 @@ A **chunk** consists of a DNA sequence of length `max_dna_len` and its correspon
   The k-mer size used in the model.  
   *Default:* `9`  
   - For **R10.4.1 data**, set this to **9**.  
-  - For **R9.4.1 data**, set this to **5**.  
+  - For **R9.4.1 data**, set this to **6**.  
   Using the wrong value for your dataset may cause unexpected behavior.
 
 ---
