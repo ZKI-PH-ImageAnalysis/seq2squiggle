@@ -1,6 +1,7 @@
 import polars as pl
 import argparse
 import os
+import sys
 
 def parse_sigtk_file(sigtk_file):
     """Parse the sigtk file to extract pa_mean and pa_std."""
@@ -88,13 +89,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Standardize the event_stdv column of a large TSV file.')
     parser.add_argument('input_file', type=str, help='Path to the input TSV file')
     parser.add_argument('output_file', type=str, help='Path to the output standardized TSV file')
-    parser.add_argument('--sigtk', type=str, help='Path to the sigtk file containing pa_mean and pa_std')
+    parser.add_argument('--sigtk', type=str, help='Path to the sigtk file containing pa_mean and pa_std', default=None)
+    parser.add_argument('--mean', type=float, help='Global mean (pa_mean) used to denormalize sample values', default=None)
+    parser.add_argument('--std', type=float, help='Global standard deviation (pa_std) used to denormalize sample values', default=None)
     parser.add_argument('--chunk_size', type=int, default=25000, help='Number of rows per chunk for processing')
     parser.add_argument('--filter_length', type=int, default=70, help='Maximal length of an event. Longer events will be filtered out.')
     args = parser.parse_args()
 
-    # Parse the sigtk file for pa_mean and pa_std
-    pa_mean, pa_std = parse_sigtk_file(args.sigtk)
+
+    if args.mean and args.std:
+        pa_mean, pa_std = args.mean, args.std
+    elif args.sigtk:
+        pa_mean, pa_std = parse_sigtk_file(args.sigtk)
+    else:
+        print("Error: You must provide either --sigtk or both --mean and --std.", file=sys.stderr)
+        sys.exit(1)
+
 
     # Standardize and write the processed data
     standardize_and_write_chunks(

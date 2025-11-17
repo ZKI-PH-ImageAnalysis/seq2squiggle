@@ -185,6 +185,8 @@ f5c eventalign \
 
 Since `uncalled4` version 4.1.0, it no longer outputs scaled pA values directly. Instead, it outputs the normalized pore model values, which have a mean of 0 and a standard deviation of 1. `seq2squiggle` requires the signals to be in pA, so they must be converted back. 
 
+This is only necessary if the samples column contains values scaled from -2 to +2. If your input TSV contains already scaled pA values (~55pA - ~165pA) you can skip this step!
+
 To denormalize signals, you first need to compute the average mean and average standard deviation of the pA values from your data. This can be done using [sigtk](https://github.com/hasindu2008/sigtk):
 
 ```bash
