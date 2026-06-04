@@ -413,10 +413,10 @@ def reverse_complement(f):
 
 
 def sampling(
-    num_seqs, genome_seqs, genome_lens, r, seed, total_len, distr, profile, min_read_len=30, max_retries=20
+    num_seqs, genome_seqs, genome_lens, genome_names, r, seed, total_len, distr, profile, min_read_len=30, max_retries=20
 ):
     """
-    Sample reads from each single genome.
+    Sample reads from each single genome, tracking origin metadata.
     """
 
     distr_funcs = {
@@ -440,6 +440,7 @@ def sampling(
             genome_index, start_index = get_genome_and_position(genome_lens, start_pos)
 
             genome = genome_seqs[genome_index]
+            genome_name = genome_names[genome_index]
 
             # Generate a unique seed for each read and retry combination
             unique_seed = seed + read_i * (max_retries + 1) + retries
@@ -461,10 +462,16 @@ def sampling(
                 if "N" in read:
                     read = N_to_ACTG(read)
 
+                # Store original position before reverse complement
+                orig_start = start_index
+                orig_end = start_index + len(read)  # Use actual read length before RC
+                
                 if read_strand == "-":
                     read = reverse_complement(read)
 
-                sampled_reads.append(read)
+                # Create metadata tuple: (sequence, genome_name, start, end, strand)
+                metadata = (read, genome_name, orig_start, orig_end, read_strand)
+                sampled_reads.append(metadata)
                 break
             else:
                 retries += 1
@@ -483,18 +490,36 @@ def export_fasta(read_l, fasta):
     file_name, _ = os.path.splitext(fasta)
     out_file = f"{file_name}_reads.fasta"
     with open(out_file, "w") as f:
-        for i, read in enumerate(read_l):
-            f.write(f"{str(uuid4())}\n{''.join(read)}\n")
+        for i, read_info in enumerate(read_l):
+            # Handle both tuples (with metadata) and strings (backward compatibility)
+            if isinstance(read_info, tuple):
+                seq, genome_name, start, end, strand = read_info
+                read_id = f"S1_{i + 1}!{genome_name}!{start}!{end}!{strand}"
+                f.write(f"{read_id}\n{seq}\n")
+            else:
+                # Fallback
+                f.write(f"{str(uuid4())}\n{read_info}\n")
     return out_file
 
 
 def yield_reads(reads):
-    return ((read, str(uuid4())) for i, read in enumerate(reads))
+    def read_generator():
+        for i, read_info in enumerate(reads):
+            # Handle both tuples (with metadata) and strings (backward compatibility)
+            if isinstance(read_info, tuple):
+                seq, genome_name, start, end, strand = read_info
+                read_id = f"S1_{i + 1}!{genome_name}!{start}!{end}!{strand}"
+                yield seq, read_id
+            else:
+                # Fallback
+                yield read_info, str(uuid4())
+    return read_generator()
 
 
 def sample_reads_from_reference(
     genome_seqs: List[str],
     genome_lens: List[int],
+    genome_names: List[str],
     n: int,
     r: int,
     c: int,
@@ -515,6 +540,8 @@ def sample_reads_from_reference(
         List of genome sequences.
     genome_lens : List[int]
         List of lengths of genome sequences.
+    genome_names : List[str]
+        List of genome names/identifiers.
     n : int
         Number of reads to generate. Use -1 to ignore and use coverage instead.
     r : int
@@ -568,9 +595,9 @@ def sample_reads_from_reference(
             " Consider reducing the desired average read length via -r."
         )
 
-    read_list = sampling(seq_num, genome_seqs, genome_lens, r, seed, total_len, distr, profile, min_read_len)
+    read_list = sampling(seq_num, genome_seqs, genome_lens, genome_names, r, seed, total_len, distr, profile, min_read_len)
 
-    total_l = sum([round(len(read) / config["max_dna_len"]) for read in read_list])
+    total_l = sum([round(len(read[0]) / config["max_dna_len"]) for read in read_list])
 
     if save:
         reads_fasta = export_fasta(read_list, fasta)
@@ -624,18 +651,23 @@ def preprocess_genome(fasta: str):
     """
 
     logger.debug("Preprocessing the genome")
-    # Append all genome seqs
-    genome_seqs = load_genome(fasta)
+    # Append all genome seqs with their names
+    genome_seqs_with_names = []
+    genome_seqs_only = []
+    for entry_seq, entry_name in read_fasta(fasta, False):
+        genome_seqs_with_names.append((entry_seq, entry_name))
+        genome_seqs_only.append(entry_seq)
 
     num_processes = multiprocessing.cpu_count()
 
     with multiprocessing.Pool(processes=num_processes) as pool:
-        results = pool.map(process_genome, genome_seqs)
+        results = pool.map(process_genome, genome_seqs_only)
 
     genome_seq_list, genome_len_list = zip(*results)
+    genome_name_list = [name for _, name in genome_seqs_with_names]
 
     logger.debug("Preprocessing the genome finished.")
-    return genome_seq_list, genome_len_list
+    return genome_seq_list, genome_len_list, genome_name_list
 
 
 def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, min_read_len, save=False):
@@ -665,8 +697,8 @@ def get_reads(fasta, read_input, n, r, c, config, distr, seed, profile, min_read
         return generator(), effective_length
         
     else: # Reference mode
-        genome_seqs, genome_lens = preprocess_genome(fasta)
-        reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, n, r, c, config, fasta, seed, save, distr, profile, min_read_len)
+        genome_seqs, genome_lens, genome_names = preprocess_genome(fasta)
+        reads_fasta, total_l = sample_reads_from_reference(genome_seqs, genome_lens, genome_names, n, r, c, config, fasta, seed, save, distr, profile, min_read_len)
     
     return read_fasta(reads_fasta, is_rna) if save else (reads_fasta, total_l)
 
