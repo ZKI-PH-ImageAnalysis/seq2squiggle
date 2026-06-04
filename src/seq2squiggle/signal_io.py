@@ -69,11 +69,12 @@ class BLOW5Writer:
         The name of the slow5 file.
     """
 
-    def __init__(self, filename, profile, ideal_mode, profile_name):
+    def __init__(self, filename, profile, ideal_mode, profile_name, preserve_read_ids):
         self.filename = filename
         self.profile: dict = profile
         self.ideal_mode = ideal_mode
         self.profile_name = profile_name
+        self.preserve_read_ids = preserve_read_ids
         self.signals = None
         self.median_before = float(self.profile["median_before_mean"])
         self.median_before_std = float(self.profile["median_before_std"])
@@ -141,7 +142,9 @@ class BLOW5Writer:
 
             record, aux = s5.get_empty_record(aux=True)
 
-            record["read_id"] = str(indexed_uuid(idx + 1)) #read_id
+            read_id_actual = read_id if self.preserve_read_ids else indexed_uuid(idx + 1)
+
+            record["read_id"] = str(read_id_actual)
             record["read_group"] = 0
             record["digitisation"] = self.digitisation
             record["offset"] = offset_value
@@ -179,11 +182,12 @@ class POD5Writer:
         The name of the pod5 file.
     """
 
-    def __init__(self, filename, profile, ideal_mode, profile_name):
+    def __init__(self, filename, profile, ideal_mode, profile_name, preserve_read_ids):
         self.filename = filename
         self.profile: dict = profile
         self.ideal_mode = ideal_mode
         self.profile_name = profile_name
+        self.preserve_read_ids = preserve_read_ids
         self.signals = None
         self.median_before = float(self.profile["median_before_mean"])
         self.median_before_std = float(self.profile["median_before_std"])
@@ -258,8 +262,10 @@ class POD5Writer:
                 reason=pod5.EndReasonEnum.SIGNAL_POSITIVE, forced=False
             )
 
+            read_id_actual = uuid.uuid5(uuid.NAMESPACE_DNS, read_id) if self.preserve_read_ids else indexed_uuid(idx + 1)
+
             read = pod5.Read(
-                read_id=indexed_uuid(idx + 1),
+                read_id=read_id_actual,
                 pore=pore,
                 calibration=calibration,
                 read_number=idx,
